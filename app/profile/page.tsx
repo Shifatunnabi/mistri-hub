@@ -2,7 +2,9 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -21,68 +23,195 @@ import {
   Upload,
   Edit,
   CheckCircle,
-  Clock,
-  MapPinned,
-  FileText,
+  Lock,
+  Shield,
 } from "lucide-react"
 import { toast } from "react-hot-toast"
 
-// Mock user data
-const mockUser = {
-  name: "Sarah Johnson",
-  email: "sarah.johnson@example.com",
-  phone: "+1 234 567 8900",
-  address: "123 Main Street, Downtown",
-  avatar: "/placeholder.svg?key=currentuser",
-  role: "Help Seeker",
-  memberSince: "January 2024",
-  jobsPosted: 12,
-  jobsCompleted: 8,
-  // Helper specific fields (if registered as helper)
-  isHelper: false,
-  helperProfile: {
-    primarySkills: "",
-    experience: 0,
-    serviceAreas: "",
-    nidNumber: "",
-    rating: 0,
-    reviewsCount: 0,
-    hourlyRate: 0,
-  },
+interface UserData {
+  _id: string
+  name: string
+  email: string
+  phone: string
+  address: string
+  role: string
+  profilePhoto?: string
+  isApproved: boolean
+  isVerified: boolean
+  createdAt: string
+  helperProfile?: {
+    nidNumber: string
+    skills: string[]
+    rating: number
+    totalReviews: number
+    completedJobs: number
+  }
 }
 
 export default function ProfilePage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [showHelperUpgrade, setShowHelperUpgrade] = useState(false)
-  const [photoPreview, setPhotoPreview] = useState<string | null>(mockUser.avatar)
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
+  const [userData, setUserData] = useState<UserData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [formData, setFormData] = useState({
-    name: mockUser.name,
-    email: mockUser.email,
-    phone: mockUser.phone,
-    address: mockUser.address,
-    photo: null as File | null,
+    name: "",
+    phone: "",
+    address: "",
+    currentPassword: "",
+    newPassword: "",
+    confirmNewPassword: "",
   })
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setFormData({ ...formData, photo: file })
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string)
+  // Redirect if not logged in
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
+
+  // Fetch user data
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (status === "authenticated") {
+        try {
+          const response = await fetch("/api/user/profile")
+          const data = await response.json()
+
+          if (response.ok) {
+            setUserData(data.user)
+            setFormData({
+              name: data.user.name,
+              phone: data.user.phone,
+              address: data.user.address,
+              currentPassword: "",
+              newPassword: "",
+              confirmNewPassword: "",
+            })
+            setPhotoPreview(data.user.profilePhoto || null)
+          } else {
+            toast.error("Failed to load profile")
+          }
+        } catch (error) {
+          console.error("Error fetching profile:", error)
+          toast.error("An error occurred")
+        } finally {
+          setIsLoading(false)
+        }
       }
-      reader.readAsDataURL(file)
+    }
+
+    fetchUserData()
+  }, [status])
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Show preview
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setPhotoPreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+
+    // Upload to server
+    setIsUploadingPhoto(true)
+    const formData = new FormData()
+    formData.append("photo", file)
+
+    try {
+      const response = await fetch("/api/user/upload-photo", {
+        method: "POST",
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success("Profile photo updated!")
+        setUserData(data.user)
+      } else {
+        toast.error(data.error || "Failed to upload photo")
+        setPhotoPreview(userData?.profilePhoto || null)
+      }
+    } catch (error) {
+      console.error("Error uploading photo:", error)
+      toast.error("Failed to upload photo")
+      setPhotoPreview(userData?.profilePhoto || null)
+    } finally {
+      setIsUploadingPhoto(false)
     }
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // Validate password fields
+    if (formData.newPassword) {
+      if (!formData.currentPassword) {
+        toast.error("Please enter your current password")
+        return
+      }
+      if (formData.newPassword !== formData.confirmNewPassword) {
+        toast.error("New passwords do not match")
+        return
+      }
+      if (formData.newPassword.length < 6) {
+        toast.error("Password must be at least 6 characters")
+        return
+      }
+    }
+
     setIsSaving(true)
-    setTimeout(() => {
-      toast.success("Profile updated successfully!")
-      setIsEditing(false)
+
+    try {
+      const response = await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name,
+          phone: formData.phone,
+          address: formData.address,
+          currentPassword: formData.currentPassword || undefined,
+          newPassword: formData.newPassword || undefined,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success("Profile updated successfully!")
+        setUserData(data.user)
+        setIsEditing(false)
+        // Clear password fields
+        setFormData({
+          ...formData,
+          currentPassword: "",
+          newPassword: "",
+          confirmNewPassword: "",
+        })
+      } else {
+        toast.error(data.error || "Failed to update profile")
+      }
+    } catch (error) {
+      console.error("Error updating profile:", error)
+      toast.error("An error occurred")
+    } finally {
       setIsSaving(false)
-    }, 1500)
+    }
+  }
+
+  if (isLoading || !userData) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading profile...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -98,13 +227,13 @@ export default function ProfilePage() {
           <div className="space-y-6">
             {/* Profile Card */}
             <Card className="overflow-hidden shadow-xl animate-fade-in-up">
-              <div className="relative h-32 bg-gradient-to-br from-primary to-accent"></div>
+              <div className="relative h-32 bg-linear-to-br from-primary to-accent"></div>
               <div className="relative px-6 pb-6">
                 <div className="relative -mt-16 mb-4">
                   <Avatar className="h-32 w-32 border-4 border-card ring-4 ring-border">
-                    <AvatarImage src={photoPreview || mockUser.avatar || "/placeholder.svg"} />
+                    <AvatarImage src={photoPreview || "/placeholder.svg"} />
                     <AvatarFallback className="bg-primary text-4xl text-primary-foreground">
-                      {mockUser.name.charAt(0)}
+                      {userData.name.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
                   {isEditing && (
@@ -125,10 +254,14 @@ export default function ProfilePage() {
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <h2 className="text-2xl font-bold">{mockUser.name}</h2>
-                    <Badge className="mt-2">{mockUser.role}</Badge>
+                    <h2 className="text-2xl font-bold">{userData.name}</h2>
+                    <Badge className="mt-2">
+                      {userData.role === "HELP_SEEKER" ? "Help Seeker" : userData.role === "HELPER" ? "Helper" : "Admin"}
+                    </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">Member since {mockUser.memberSince}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Member since {new Date(userData.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                  </p>
                 </div>
               </div>
             </Card>
@@ -137,71 +270,38 @@ export default function ProfilePage() {
             <Card className="p-6 shadow-xl animate-fade-in-up animation-delay-200">
               <h3 className="mb-4 font-bold">Activity Stats</h3>
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    <span className="text-sm">Jobs Posted</span>
-                  </div>
-                  <span className="font-bold">{mockUser.jobsPosted}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-muted-foreground">
-                    <CheckCircle className="h-4 w-4" />
-                    <span className="text-sm">Jobs Completed</span>
-                  </div>
-                  <span className="font-bold">{mockUser.jobsCompleted}</span>
-                </div>
-                {mockUser.isHelper && (
+                {userData.role === "HELPER" && userData.isApproved && (
                   <>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2 text-muted-foreground">
                         <Star className="h-4 w-4" />
                         <span className="text-sm">Rating</span>
                       </div>
-                      <span className="font-bold">{mockUser.helperProfile.rating}/5</span>
+                      <span className="font-bold">{userData.helperProfile?.rating || 0}/5</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2 text-muted-foreground">
-                        <User className="h-4 w-4" />
-                        <span className="text-sm">Reviews</span>
+                        <Briefcase className="h-4 w-4" />
+                        <span className="text-sm">Completed Jobs</span>
                       </div>
-                      <span className="font-bold">{mockUser.helperProfile.reviewsCount}</span>
+                      <span className="font-bold">{userData.helperProfile?.completedJobs || 0}</span>
                     </div>
                   </>
                 )}
               </div>
             </Card>
-
-            {/* Upgrade to Helper */}
-            {!mockUser.isHelper && (
-              <Card className="overflow-hidden p-6 shadow-xl animate-fade-in-up animation-delay-300">
-                <div className="mb-4 space-y-2">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-foreground">
-                    <Briefcase className="h-6 w-6" />
-                  </div>
-                  <h3 className="font-bold">Become a Helper</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    Start earning by helping others with your skills. Register as a helper today!
-                  </p>
-                </div>
-                <Button
-                  onClick={() => setShowHelperUpgrade(true)}
-                  className="w-full bg-accent text-accent-foreground hover:bg-accent/90 transition-all duration-300 hover:scale-105"
-                >
-                  Register as Helper
-                </Button>
-              </Card>
-            )}
           </div>
 
           {/* Main Content */}
           <div className="lg:col-span-2">
             <Tabs defaultValue="personal" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className={`grid w-full ${userData.role === "HELPER" ? "grid-cols-2" : "grid-cols-1"}`}>
                 <TabsTrigger value="personal">Personal Info</TabsTrigger>
-                <TabsTrigger value="helper" disabled={!mockUser.isHelper && !showHelperUpgrade}>
-                  Helper Profile
-                </TabsTrigger>
+                {userData.role === "HELPER" && (
+                  <TabsTrigger value="helper">
+                    Helper Profile
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               {/* Personal Information Tab */}
@@ -227,13 +327,14 @@ export default function ProfilePage() {
                           onClick={() => {
                             setIsEditing(false)
                             setFormData({
-                              name: mockUser.name,
-                              email: mockUser.email,
-                              phone: mockUser.phone,
-                              address: mockUser.address,
-                              photo: null,
+                              name: userData.name,
+                              phone: userData.phone,
+                              address: userData.address,
+                              currentPassword: "",
+                              newPassword: "",
+                              confirmNewPassword: "",
                             })
-                            setPhotoPreview(mockUser.avatar)
+                            setPhotoPreview(userData.profilePhoto || null)
                           }}
                           variant="outline"
                         >
@@ -272,10 +373,10 @@ export default function ProfilePage() {
                         <Input
                           id="email"
                           type="email"
-                          value={formData.email}
-                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                          disabled={!isEditing}
-                          className="pl-10"
+                          value={userData.email}
+                          disabled={true}
+                          className="pl-10 bg-muted cursor-not-allowed"
+                          title="Email cannot be changed"
                         />
                       </div>
                     </div>
@@ -304,30 +405,284 @@ export default function ProfilePage() {
                           value={formData.address}
                           onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                           disabled={!isEditing}
-                          className="pl-10 min-h-[80px]"
+                          className="pl-10 min-h-20"
                         />
                       </div>
                     </div>
+
+                    {isEditing && (
+                      <>
+                        <div className="border-t pt-6 space-y-2">
+                          <h4 className="font-semibold flex items-center gap-2">
+                            <Lock className="h-4 w-4" />
+                            Change Password (Optional)
+                          </h4>
+                          <p className="text-sm text-muted-foreground">Leave blank to keep current password</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="currentPassword">Current Password</Label>
+                          <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              id="currentPassword"
+                              type="password"
+                              value={formData.currentPassword}
+                              onChange={(e) => setFormData({ ...formData, currentPassword: e.target.value })}
+                              className="pl-10"
+                              placeholder="Enter current password"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="newPassword">New Password</Label>
+                          <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              id="newPassword"
+                              type="password"
+                              value={formData.newPassword}
+                              onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
+                              className="pl-10"
+                              placeholder="Enter new password (min 6 characters)"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
+                          <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              id="confirmNewPassword"
+                              type="password"
+                              value={formData.confirmNewPassword}
+                              onChange={(e) => setFormData({ ...formData, confirmNewPassword: e.target.value })}
+                              className="pl-10"
+                              placeholder="Confirm new password"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </Card>
               </TabsContent>
 
-              {/* Helper Profile Tab */}
-              <TabsContent value="helper">
-                {showHelperUpgrade ? (
-                  <HelperUpgradeForm onCancel={() => setShowHelperUpgrade(false)} />
-                ) : (
-                  <Card className="shadow-xl animate-fade-in-up">
-                    <div className="border-b border-border p-6">
-                      <h3 className="text-xl font-bold">Helper Profile</h3>
-                      <p className="text-sm text-muted-foreground">Your professional information</p>
-                    </div>
-                    <div className="p-6">
-                      <p className="text-center text-muted-foreground">Register as a helper to access this section</p>
-                    </div>
-                  </Card>
-                )}
-              </TabsContent>
+              {/* Helper Profile Tab - Only visible for HELPER role */}
+              {userData.role === "HELPER" && (
+                <TabsContent value="helper">
+                  <div className="space-y-6">
+                    {/* Helper Info Card */}
+                    <Card className="shadow-xl animate-fade-in-up">
+                      <div className="border-b border-border p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-xl font-bold">Helper Profile</h3>
+                            <p className="text-sm text-muted-foreground">Your professional information</p>
+                          </div>
+                          <div className="flex gap-2">
+                            {!userData.isApproved && (
+                              <Badge variant="outline" className="flex items-center gap-1">
+                                Pending Approval
+                              </Badge>
+                            )}
+                            {userData.isVerified && (
+                              <Badge variant="default" className="flex items-center gap-1">
+                                <Shield className="h-3 w-3" />
+                                Verified
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-6 space-y-6">
+                        <div className="space-y-2">
+                          <Label>NID Number</Label>
+                          <Input
+                            value={userData.helperProfile?.nidNumber || "Not provided"}
+                            disabled
+                            className="bg-muted"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Skills</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {userData.helperProfile?.skills && userData.helperProfile.skills.length > 0 ? (
+                              userData.helperProfile.skills.map((skill, index) => (
+                                <Badge key={index} variant="secondary">
+                                  {skill}
+                                </Badge>
+                              ))
+                            ) : (
+                              <p className="text-sm text-muted-foreground">No skills added yet</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Rating</Label>
+                            <div className="flex items-center gap-2">
+                              <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                              <span className="text-2xl font-bold">
+                                {userData.helperProfile?.rating || 0}/5
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Completed Jobs</Label>
+                            <div className="flex items-center gap-2">
+                              <CheckCircle className="h-5 w-5 text-green-500" />
+                              <span className="text-2xl font-bold">
+                                {userData.helperProfile?.completedJobs || 0}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {!userData.isApproved && (
+                          <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                              Your helper account is pending admin approval. You will receive an email once your account is approved.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+
+                    {/* Verification Documents Card - Only for approved helpers */}
+                    {userData.isApproved && (
+                      <Card className="shadow-xl animate-fade-in-up">
+                        <div className="border-b border-border p-6">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="text-xl font-bold">Verification Badge</h3>
+                              <p className="text-sm text-muted-foreground">
+                                Upload documents to get verified and increase trust
+                              </p>
+                            </div>
+                            {userData.isVerified ? (
+                              <Badge variant="default" className="flex items-center gap-2">
+                                <Shield className="h-4 w-4" />
+                                Verified
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline">Not Verified</Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="p-6 space-y-6">
+                          {!userData.isVerified ? (
+                            <>
+                              <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                                <div className="flex gap-3">
+                                  <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                                  <div>
+                                    <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                                      Why get verified?
+                                    </h4>
+                                    <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                                      <li>• Increase your profile visibility</li>
+                                      <li>• Build trust with clients</li>
+                                      <li>• Get more job opportunities</li>
+                                      <li>• Stand out from other helpers</li>
+                                    </ul>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="certificates">
+                                    Certificates / Licenses (Optional)
+                                  </Label>
+                                  <p className="text-xs text-muted-foreground">
+                                    Upload relevant certificates, licenses, or training documents
+                                  </p>
+                                  <div className="border-2 border-dashed border-border rounded-lg p-6 hover:border-primary transition-colors">
+                                    <label
+                                      htmlFor="certificates"
+                                      className="flex flex-col items-center justify-center cursor-pointer"
+                                    >
+                                      <Upload className="h-10 w-10 text-muted-foreground mb-2" />
+                                      <span className="text-sm font-medium">Click to upload documents</span>
+                                      <span className="text-xs text-muted-foreground mt-1">
+                                        PDF, JPG, PNG (Max 5MB each)
+                                      </span>
+                                      <input
+                                        id="certificates"
+                                        type="file"
+                                        accept=".pdf,.jpg,.jpeg,.png"
+                                        multiple
+                                        className="hidden"
+                                        onChange={(e) => {
+                                          // Handle certificate upload
+                                          toast.success("Certificate uploaded! Pending admin review.")
+                                        }}
+                                      />
+                                    </label>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label htmlFor="portfolio">
+                                    Portfolio / Work Samples (Optional)
+                                  </Label>
+                                  <p className="text-xs text-muted-foreground">
+                                    Upload photos of your previous work
+                                  </p>
+                                  <div className="border-2 border-dashed border-border rounded-lg p-6 hover:border-primary transition-colors">
+                                    <label
+                                      htmlFor="portfolio"
+                                      className="flex flex-col items-center justify-center cursor-pointer"
+                                    >
+                                      <Upload className="h-10 w-10 text-muted-foreground mb-2" />
+                                      <span className="text-sm font-medium">Click to upload photos</span>
+                                      <span className="text-xs text-muted-foreground mt-1">
+                                        JPG, PNG (Max 5MB each)
+                                      </span>
+                                      <input
+                                        id="portfolio"
+                                        type="file"
+                                        accept=".jpg,.jpeg,.png"
+                                        multiple
+                                        className="hidden"
+                                        onChange={(e) => {
+                                          // Handle portfolio upload
+                                          toast.success("Portfolio uploaded! Pending admin review.")
+                                        }}
+                                      />
+                                    </label>
+                                  </div>
+                                </div>
+
+                                <Button className="w-full" size="lg">
+                                  <Shield className="mr-2 h-4 w-4" />
+                                  Submit for Verification
+                                </Button>
+                              </div>
+                            </>  
+                          ) : (
+                            <div className="text-center py-8">
+                              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 mb-4">
+                                <Shield className="h-8 w-8 text-green-600 dark:text-green-400" />
+                              </div>
+                              <h4 className="text-lg font-semibold mb-2">You are verified!</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Your profile has been verified by our admin team.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    )}
+                  </div>
+                </TabsContent>
+              )}
             </Tabs>
           </div>
         </div>
@@ -336,191 +691,4 @@ export default function ProfilePage() {
   )
 }
 
-function HelperUpgradeForm({ onCancel }: { onCancel: () => void }) {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
-  const [nidPhotoPreview, setNidPhotoPreview] = useState<string | null>(null)
-  const [formData, setFormData] = useState({
-    photo: null as File | null,
-    primarySkills: "",
-    experience: "",
-    serviceAreas: "",
-    nidNumber: "",
-    nidPhoto: null as File | null,
-  })
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setFormData({ ...formData, photo: file })
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
-  const handleNidPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setFormData({ ...formData, nidPhoto: file })
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setNidPhotoPreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    setTimeout(() => {
-      toast.success("Helper registration submitted! Awaiting verification.")
-      setIsSubmitting(false)
-    }, 1500)
-  }
-
-  return (
-    <Card className="shadow-xl animate-fade-in-up">
-      <div className="border-b border-border bg-accent/5 p-6">
-        <h3 className="text-xl font-bold">Register as Helper</h3>
-        <p className="text-sm text-muted-foreground">Complete your helper profile to start earning</p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6 p-6">
-        <div className="space-y-2">
-          <Label htmlFor="helper-photo">Profile Photo *</Label>
-          <div className="flex items-center space-x-4">
-            {photoPreview && (
-              <img
-                src={photoPreview || "/placeholder.svg"}
-                alt="Preview"
-                className="h-20 w-20 rounded-lg object-cover ring-2 ring-border"
-              />
-            )}
-            <label
-              htmlFor="helper-photo"
-              className="flex cursor-pointer items-center space-x-2 rounded-lg border-2 border-dashed border-border px-4 py-3 transition-colors hover:border-primary"
-            >
-              <Upload className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Upload Photo</span>
-            </label>
-            <input
-              id="helper-photo"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handlePhotoChange}
-              required
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="primarySkills">Primary Skills *</Label>
-          <div className="relative">
-            <Briefcase className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-            <Textarea
-              id="primarySkills"
-              placeholder="e.g., Plumbing, Electrical Work, Carpentry"
-              className="pl-10 min-h-[80px]"
-              required
-              value={formData.primarySkills}
-              onChange={(e) => setFormData({ ...formData, primarySkills: e.target.value })}
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-6 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="experience">Experience (Years) *</Label>
-            <Input
-              id="experience"
-              type="number"
-              placeholder="5"
-              min="0"
-              required
-              value={formData.experience}
-              onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="serviceAreas">Service Areas *</Label>
-            <div className="relative">
-              <MapPinned className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="serviceAreas"
-                placeholder="Downtown, Suburbs"
-                className="pl-10"
-                required
-                value={formData.serviceAreas}
-                onChange={(e) => setFormData({ ...formData, serviceAreas: e.target.value })}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-6 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="nidNumber">NID Number *</Label>
-            <div className="relative">
-              <FileText className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="nidNumber"
-                placeholder="123456789"
-                className="pl-10"
-                required
-                value={formData.nidNumber}
-                onChange={(e) => setFormData({ ...formData, nidNumber: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="nidPhoto">NID Photo *</Label>
-            <div className="flex items-center space-x-4">
-              {nidPhotoPreview && (
-                <img
-                  src={nidPhotoPreview || "/placeholder.svg"}
-                  alt="NID Preview"
-                  className="h-12 w-20 rounded object-cover ring-2 ring-border"
-                />
-              )}
-              <label
-                htmlFor="nidPhoto"
-                className="flex cursor-pointer items-center space-x-2 rounded-lg border-2 border-dashed border-border px-4 py-2 transition-colors hover:border-primary"
-              >
-                <Upload className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Upload</span>
-              </label>
-              <input
-                id="nidPhoto"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleNidPhotoChange}
-                required
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end space-x-4 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            disabled={isSubmitting}
-            className="bg-accent text-accent-foreground hover:bg-accent/90 transition-all duration-300 hover:scale-105"
-          >
-            {isSubmitting ? "Submitting..." : "Submit for Verification"}
-          </Button>
-        </div>
-      </form>
-    </Card>
-  )
-}

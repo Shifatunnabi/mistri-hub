@@ -80,14 +80,57 @@ export default function HelperRegisterPage() {
       return
     }
 
+    if (formData.password.length < 6) {
+      toast.error("Password must be at least 6 characters")
+      return
+    }
+
+    if (!formData.nidNumber) {
+      toast.error("NID number is required")
+      return
+    }
+
     setIsLoading(true)
 
-    // TODO: Replace with actual registration logic
-    setTimeout(() => {
-      toast.success("Registration successful! Your profile will be verified.")
-      router.push("/login")
+    try {
+      const response = await fetch("/api/auth/register/helper", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          nidNumber: formData.nidNumber,
+          password: formData.password,
+          confirmPassword: formData.confirmPassword,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success(
+          data.message ||
+            "Registration submitted! Your account is pending admin approval. You will receive an email once approved."
+        )
+        router.push("/login")
+      } else {
+        if (data.details) {
+          // Show validation errors
+          data.details.forEach((err: any) => {
+            toast.error(err.message)
+          })
+        } else {
+          toast.error(data.error || "Registration failed")
+        }
+      }
+    } catch (error) {
+      console.error("Helper registration error:", error)
+      toast.error("An error occurred. Please try again.")
+    } finally {
       setIsLoading(false)
-    }, 1500)
+    }
   }
 
   return (

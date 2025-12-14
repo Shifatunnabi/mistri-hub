@@ -3,14 +3,17 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Menu, X } from "lucide-react"
+import { Menu, X, LogOut } from "lucide-react"
 import { useState, useEffect } from "react"
 import Image from "next/image"
+import { useSession, signOut } from "next-auth/react"
+import { toast } from "react-hot-toast"
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [isLoggedIn, setIsLoggedIn] = useState(false) // TODO: Replace with actual auth state
+  const { data: session, status } = useSession()
+  const isLoggedIn = status === "authenticated"
 
   useEffect(() => {
     const handleScroll = () => {
@@ -57,12 +60,31 @@ export function Navbar() {
           {/* Auth Buttons / User Avatar */}
           <div className="hidden items-center space-x-4 md:flex">
             {isLoggedIn ? (
-              <Link href="/profile">
-                <Avatar className="h-10 w-10 cursor-pointer ring-2 ring-transparent transition-all duration-300 hover:ring-primary">
-                  <AvatarImage src="/placeholder.svg?height=40&width=40" alt="User" />
-                  <AvatarFallback className="bg-primary text-primary-foreground">U</AvatarFallback>
-                </Avatar>
-              </Link>
+              <>
+                <Link href="/profile">
+                  <Avatar className="h-10 w-10 cursor-pointer ring-2 ring-transparent transition-all duration-300 hover:ring-primary">
+                    <AvatarImage
+                      src={session?.user?.profilePhoto || "/placeholder.svg?height=40&width=40"}
+                      alt={session?.user?.name || "User"}
+                    />
+                    <AvatarFallback className="bg-primary text-primary-foreground">
+                      {session?.user?.name?.charAt(0).toUpperCase() || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    signOut({ callbackUrl: "/" })
+                    toast.success("Logged out successfully")
+                  }}
+                  className="transition-all duration-300 hover:scale-105"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </Button>
+              </>
             ) : (
               <>
                 <Button variant="ghost" asChild className="transition-all duration-300 hover:scale-105">

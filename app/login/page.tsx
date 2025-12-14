@@ -11,6 +11,7 @@ import Link from "next/link"
 import { Mail, Lock, Eye, EyeOff } from "lucide-react"
 import { toast } from "react-hot-toast"
 import { useRouter } from "next/navigation"
+import { signIn } from "next-auth/react"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -25,12 +26,26 @@ export default function LoginPage() {
     e.preventDefault()
     setIsLoading(true)
 
-    // TODO: Replace with actual authentication logic
-    setTimeout(() => {
-      toast.success("Login successful!")
-      router.push("/home")
+    try {
+      const result = await signIn("credentials", {
+        email: formData.email,
+        password: formData.password,
+        redirect: false,
+      })
+
+      if (result?.error) {
+        toast.error(result.error)
+      } else {
+        toast.success("Login successful!")
+        router.push("/job-board")
+        router.refresh()
+      }
+    } catch (error) {
+      console.error("Login error:", error)
+      toast.error("An error occurred. Please try again.")
+    } finally {
       setIsLoading(false)
-    }, 1500)
+    }
   }
 
   return (
