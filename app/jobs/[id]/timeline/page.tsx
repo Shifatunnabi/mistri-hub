@@ -10,6 +10,7 @@ import { ArrowLeft, MessageCircle, Star, CheckCircle2, Clock } from "lucide-reac
 import Link from "next/link"
 import { ChatWindow } from "@/components/chat-window"
 import { toast } from "react-hot-toast"
+import { VerifiedBadge } from "@/components/verified-badge"
 
 const mockJob = {
   id: "1",
@@ -26,6 +27,7 @@ const mockJob = {
     name: "John Smith",
     avatar: "/placeholder.svg?key=helper1",
     rating: 4.8,
+    isVerified: true,
   },
   timeline: [
     { status: "Request Sent", completed: true, date: "2024-01-15 10:00 AM" },
@@ -121,7 +123,10 @@ export default function JobTimelinePage({ params }: { params: { id: string } }) 
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-bold">{mockJob.helper.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold">{mockJob.helper.name}</p>
+                        <VerifiedBadge isVerified={mockJob.helper.isVerified} size="sm" />
+                      </div>
                       <div className="flex items-center space-x-1 text-sm">
                         <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                         <span>{mockJob.helper.rating}</span>

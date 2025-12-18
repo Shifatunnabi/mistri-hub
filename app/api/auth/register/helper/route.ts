@@ -20,12 +20,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "User with this email already exists" }, { status: 400 })
     }
 
-    // Check if NID already exists
-    const existingNID = await User.findOne({ "helperProfile.nidNumber": validatedData.nidNumber })
-    if (existingNID) {
-      return NextResponse.json({ error: "Helper with this NID number already exists" }, { status: 400 })
-    }
-
     // Hash password
     const hashedPassword = await bcrypt.hash(validatedData.password, 10)
 
@@ -38,8 +32,16 @@ export async function POST(req: NextRequest) {
       address: validatedData.address,
       role: "HELPER",
       isApproved: false, // Requires admin approval
+      profilePhoto: body.profilePhoto || "",
       helperProfile: {
-        nidNumber: validatedData.nidNumber,
+        skills: body.skills || [],
+        certificates: [],
+        serviceAreas: body.serviceAreas ? body.serviceAreas.split(",").map((s: string) => s.trim()) : [],
+        experience: body.experience || "",
+        rating: 0,
+        totalReviews: 0,
+        completedJobs: 0,
+        verificationDocuments: [],
       },
     })
 
@@ -52,7 +54,6 @@ export async function POST(req: NextRequest) {
       address: newHelper.address,
       role: newHelper.role,
       isApproved: newHelper.isApproved,
-      nidNumber: newHelper.helperProfile?.nidNumber,
     }
 
     return NextResponse.json(

@@ -5,7 +5,7 @@ import User from "@/models/User"
 import { authOptions } from "@/lib/auth"
 import { sendHelperApprovalEmail } from "@/lib/email"
 
-// GET - Fetch all pending helper approvals
+// GET - Fetch all helpers (pending and approved)
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -16,15 +16,14 @@ export async function GET(req: NextRequest) {
 
     await connectDB()
 
-    const pendingHelpers = await User.find({
+    // Fetch all helpers regardless of approval status
+    const helpers = await User.find({
       role: "HELPER",
-      isApproved: false,
-      isBanned: false,
-    }).select("-password")
+    }).select("-password").sort({ createdAt: -1 })
 
-    return NextResponse.json({ helpers: pendingHelpers }, { status: 200 })
+    return NextResponse.json({ helpers }, { status: 200 })
   } catch (error) {
-    console.error("Error fetching pending helpers:", error)
+    console.error("Error fetching helpers:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -40,13 +39,13 @@ export async function POST(req: NextRequest) {
 
     await connectDB()
 
-    const { helperId, action } = await req.json() // action: 'approve' or 'reject'
+    const { userId, action } = await req.json() // action: 'approve' or 'reject'
 
-    if (!helperId || !action) {
-      return NextResponse.json({ error: "Helper ID and action are required" }, { status: 400 })
+    if (!userId || !action) {
+      return NextResponse.json({ error: "User ID and action are required" }, { status: 400 })
     }
 
-    const helper = await User.findById(helperId)
+    const helper = await User.findById(userId)
 
     if (!helper || helper.role !== "HELPER") {
       return NextResponse.json({ error: "Helper not found" }, { status: 404 })
@@ -75,7 +74,7 @@ export async function POST(req: NextRequest) {
       // For rejection, we can either delete or keep with isApproved: false
       // Let's send rejection email and delete the account
       await sendHelperApprovalEmail(helper.email, helper.name, false)
-      await User.findByIdAndDelete(helperId)
+      await User.findByIdAndDelete(userId)
 
       return NextResponse.json({ message: "Helper rejected and removed" }, { status: 200 })
     } else {

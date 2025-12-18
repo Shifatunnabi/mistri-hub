@@ -14,20 +14,22 @@ export interface IUser extends Document {
   isApproved: boolean // For HELPER approval by admin
   isVerified: boolean // For HELPER verification badge
   isBanned: boolean
+  verificationStatus?: string // For tracking verification submission status
   createdAt: Date
   updatedAt: Date
 
   // Helper-specific fields
   helperProfile?: {
-    nidNumber: string
-    nidPhoto?: string
     skills: string[]
     certificates: string[]
     serviceAreas: string[]
+    experience?: string
     hourlyRate?: number
     rating: number
     totalReviews: number
     completedJobs: number
+    nidNumber?: string
+    nidPhoto?: string
     verificationDocuments: string[]
   }
 }
@@ -86,14 +88,12 @@ const UserSchema = new Schema<IUser>(
       type: Boolean,
       default: false,
     },
+    verificationStatus: {
+      type: String,
+      enum: ["none", "pending", "verified", "rejected"],
+      default: "none",
+    },
     helperProfile: {
-      nidNumber: {
-        type: String,
-        required: function (this: IUser) {
-          return this.role === "HELPER"
-        },
-      },
-      nidPhoto: String,
       skills: {
         type: [String],
         default: [],
@@ -105,6 +105,18 @@ const UserSchema = new Schema<IUser>(
       serviceAreas: {
         type: [String],
         default: [],
+      },
+      experience: {
+        type: String,
+        default: "",
+      },
+      nidNumber: {
+        type: String,
+        default: "",
+      },
+      nidPhoto: {
+        type: String,
+        default: "",
       },
       hourlyRate: {
         type: Number,

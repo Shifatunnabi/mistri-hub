@@ -32,7 +32,6 @@ export default function HelperRegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
-  const [nidPhotoPreview, setNidPhotoPreview] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -42,8 +41,6 @@ export default function HelperRegisterPage() {
     primarySkills: "",
     experience: "",
     serviceAreas: "",
-    nidNumber: "",
-    nidPhoto: null as File | null,
     password: "",
     confirmPassword: "",
   })
@@ -60,16 +57,21 @@ export default function HelperRegisterPage() {
     }
   }
 
-  const handleNidPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setFormData({ ...formData, nidPhoto: file })
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setNidPhotoPreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
+  const uploadToCloudinary = async (file: File): Promise<string> => {
+    const formDataUpload = new FormData()
+    formDataUpload.append("photo", file)
+
+    const response = await fetch("/api/upload/photo", {
+      method: "POST",
+      body: formDataUpload,
+    })
+
+    if (!response.ok) {
+      throw new Error("Failed to upload image")
     }
+
+    const data = await response.json()
+    return data.photoUrl
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,14 +87,24 @@ export default function HelperRegisterPage() {
       return
     }
 
-    if (!formData.nidNumber) {
-      toast.error("NID number is required")
-      return
-    }
-
     setIsLoading(true)
 
     try {
+      // Upload profile photo to Cloudinary if provided
+      let profilePhotoUrl = ""
+      if (formData.photo) {
+        try {
+          toast.loading("Uploading profile photo...")
+          profilePhotoUrl = await uploadToCloudinary(formData.photo)
+          toast.dismiss()
+        } catch (error) {
+          toast.dismiss()
+          toast.error("Failed to upload photo. Please try again.")
+          setIsLoading(false)
+          return
+        }
+      }
+
       const response = await fetch("/api/auth/register/helper", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -101,9 +113,12 @@ export default function HelperRegisterPage() {
           email: formData.email,
           phone: formData.phone,
           address: formData.address,
-          nidNumber: formData.nidNumber,
           password: formData.password,
           confirmPassword: formData.confirmPassword,
+          profilePhoto: profilePhotoUrl,
+          skills: formData.primarySkills.split(",").map(s => s.trim()).filter(s => s),
+          experience: formData.experience,
+          serviceAreas: formData.serviceAreas,
         }),
       })
 
@@ -293,56 +308,6 @@ export default function HelperRegisterPage() {
                       required
                       value={formData.serviceAreas}
                       onChange={(e) => setFormData({ ...formData, serviceAreas: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Verification Information */}
-            <div className="space-y-4 border-t border-border pt-6">
-              <h3 className="text-lg font-bold">Verification Information</h3>
-
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="nidNumber">NID Number *</Label>
-                  <div className="relative">
-                    <FileText className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="nidNumber"
-                      placeholder="123456789"
-                      className="pl-10"
-                      required
-                      value={formData.nidNumber}
-                      onChange={(e) => setFormData({ ...formData, nidNumber: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="nidPhoto">NID Photo *</Label>
-                  <div className="flex items-center space-x-4">
-                    {nidPhotoPreview && (
-                      <img
-                        src={nidPhotoPreview || "/placeholder.svg"}
-                        alt="NID Preview"
-                        className="h-12 w-20 rounded object-cover ring-2 ring-border"
-                      />
-                    )}
-                    <label
-                      htmlFor="nidPhoto"
-                      className="flex cursor-pointer items-center space-x-2 rounded-lg border-2 border-dashed border-border px-4 py-2 transition-colors hover:border-primary"
-                    >
-                      <Upload className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Upload</span>
-                    </label>
-                    <input
-                      id="nidPhoto"
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleNidPhotoChange}
-                      required
                     />
                   </div>
                 </div>

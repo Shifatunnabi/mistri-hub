@@ -27,6 +27,7 @@ import {
   Shield,
 } from "lucide-react"
 import { toast } from "react-hot-toast"
+import { VerifiedBadge } from "@/components/verified-badge"
 
 interface UserData {
   _id: string
@@ -38,13 +39,16 @@ interface UserData {
   profilePhoto?: string
   isApproved: boolean
   isVerified: boolean
+  verificationStatus?: string
   createdAt: string
   helperProfile?: {
-    nidNumber: string
     skills: string[]
     rating: number
     totalReviews: number
     completedJobs: number
+    nidNumber?: string
+    nidPhoto?: string
+    verificationDocuments: string[]
   }
 }
 
@@ -54,9 +58,19 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
+  const [isSubmittingVerification, setIsSubmittingVerification] = useState(false)
   const [userData, setUserData] = useState<UserData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  
+  // Verification form state
+  const [verificationForm, setVerificationForm] = useState({
+    nidNumber: "",
+    nidPhoto: null as File | null,
+    certificates: [] as File[],
+  })
+  const [nidPhotoPreview, setNidPhotoPreview] = useState<string | null>(null)
+  const [certificatePreviews, setCertificatePreviews] = useState<string[]>([])
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -134,6 +148,9 @@ export default function ProfilePage() {
       if (response.ok) {
         toast.success("Profile photo updated!")
         setUserData(data.user)
+        // Update session with new photo
+        await fetch("/api/auth/session?update=true")
+        window.location.reload() // Reload to update session across all components
       } else {
         toast.error(data.error || "Failed to upload photo")
         setPhotoPreview(userData?.profilePhoto || null)
@@ -203,6 +220,124 @@ export default function ProfilePage() {
     }
   }
 
+  const handleNidPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setVerificationForm({ ...verificationForm, nidPhoto: file })
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setNidPhotoPreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleCertificateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length > 0) {
+      const newCertificates = [...verificationForm.certificates, ...files]
+      setVerificationForm({ ...verificationForm, certificates: newCertificates })
+      
+      // Create previews
+      const newPreviews: string[] = []
+      files.forEach(file => {
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          newPreviews.push(reader.result as string)
+          if (newPreviews.length === files.length) {
+            setCertificatePreviews([...certificatePreviews, ...newPreviews])
+          }
+        }
+        reader.readAsDataURL(file)
+      })
+    }
+  }
+
+  const removeCertificate = (index: number) => {
+    const newCertificates = verificationForm.certificates.filter((_, i) => i !== index)
+    const newPreviews = certificatePreviews.filter((_, i) => i !== index)
+    setVerificationForm({ ...verificationForm, certificates: newCertificates })
+    setCertificatePreviews(newPreviews)
+  }
+
+  const uploadToCloudinary = async (file: File): Promise<string> => {
+    const formDataUpload = new FormData()
+    formDataUpload.append("photo", file)
+
+    const response = await fetch("/api/upload/photo", {
+      method: "POST",
+      body: formDataUpload,
+    })
+
+    if (!response.ok) {
+      throw new Error("Failed to upload image")
+    }
+
+    const data = await response.json()
+    return data.photoUrl
+  }
+
+  const handleSubmitVerification = async () => {
+    if (!verificationForm.nidNumber || !verificationForm.nidPhoto || verificationForm.certificates.length === 0) {
+      toast.error("Please fill all required fields (NID number, NID photo, and at least one certificate)")
+      return
+    }
+
+    setIsSubmittingVerification(true)
+    const uploadToast = toast.loading("Uploading documents...")
+
+    try {
+      // Upload all files in parallel for better performance
+      const [nidPhotoUrl, ...certificateUrls] = await Promise.all([
+        uploadToCloudinary(verificationForm.nidPhoto),
+        ...verificationForm.certificates.map(cert => uploadToCloudinary(cert))
+      ])
+
+      toast.dismiss(uploadToast)
+      toast.loading("Submitting verification request...")
+
+      // Submit verification request
+      const response = await fetch("/api/helper/verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nidNumber: verificationForm.nidNumber,
+          nidPhoto: nidPhotoUrl,
+          certificates: certificateUrls,
+        }),
+      })
+
+      const data = await response.json()
+      toast.dismiss()
+
+      if (response.ok) {
+        toast.success("Verification documents submitted successfully! Awaiting admin review.")
+        // Refresh user data
+        const userResponse = await fetch("/api/user/profile")
+        const userData = await userResponse.json()
+        if (userResponse.ok) {
+          setUserData(userData.user)
+        }
+        // Clear form
+        setVerificationForm({
+          nidNumber: "",
+          nidPhoto: null,
+          certificates: [],
+        })
+        setNidPhotoPreview(null)
+        setCertificatePreviews([])
+      } else {
+        toast.error(data.error || "Failed to submit verification")
+      }
+    } catch (error) {
+      console.error("Error submitting verification:", error)
+      toast.dismiss(uploadToast)
+      toast.error("An error occurred while submitting verification")
+    } finally {
+      setIsSubmittingVerification(false)
+    }
+  }
+
   if (isLoading || !userData) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -254,7 +389,10 @@ export default function ProfilePage() {
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <h2 className="text-2xl font-bold">{userData.name}</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-2xl font-bold">{userData.name}</h2>
+                      {userData.role === "HELPER" && <VerifiedBadge isVerified={userData.isVerified} size="lg" />}
+                    </div>
                     <Badge className="mt-2">
                       {userData.role === "HELP_SEEKER" ? "Help Seeker" : userData.role === "HELPER" ? "Helper" : "Admin"}
                     </Badge>
@@ -499,15 +637,6 @@ export default function ProfilePage() {
                       </div>
                       <div className="p-6 space-y-6">
                         <div className="space-y-2">
-                          <Label>NID Number</Label>
-                          <Input
-                            value={userData.helperProfile?.nidNumber || "Not provided"}
-                            disabled
-                            className="bg-muted"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
                           <Label>Skills</Label>
                           <div className="flex flex-wrap gap-2">
                             {userData.helperProfile?.skills && userData.helperProfile.skills.length > 0 ? (
@@ -560,9 +689,9 @@ export default function ProfilePage() {
                         <div className="border-b border-border p-6">
                           <div className="flex items-center justify-between">
                             <div>
-                              <h3 className="text-xl font-bold">Verification Badge</h3>
+                              <h3 className="text-xl font-bold">Verification Documents</h3>
                               <p className="text-sm text-muted-foreground">
-                                Upload documents to get verified and increase trust
+                                Submit documents to get verified and apply for jobs
                               </p>
                             </div>
                             {userData.isVerified ? (
@@ -570,26 +699,61 @@ export default function ProfilePage() {
                                 <Shield className="h-4 w-4" />
                                 Verified
                               </Badge>
+                            ) : userData.verificationStatus === "pending" ? (
+                              <Badge variant="outline" className="flex items-center gap-2">
+                                <Upload className="h-4 w-4" />
+                                Pending Review
+                              </Badge>
                             ) : (
                               <Badge variant="outline">Not Verified</Badge>
                             )}
                           </div>
                         </div>
                         <div className="p-6 space-y-6">
-                          {!userData.isVerified ? (
+                          {userData.isVerified ? (
+                            <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                              <div className="flex gap-3">
+                                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5" />
+                                <div>
+                                  <h4 className="font-semibold text-green-900 dark:text-green-100 mb-1">
+                                    Your account is verified!
+                                  </h4>
+                                  <p className="text-sm text-green-800 dark:text-green-200">
+                                    You can now apply for jobs on the platform. Your verified badge will be displayed on your profile.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : userData.verificationStatus === "pending" ? (
+                            <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                              <div className="flex gap-3">
+                                <Upload className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                                <div>
+                                  <h4 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
+                                    Verification Pending
+                                  </h4>
+                                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                                    Your verification documents have been submitted and are under review. You will be notified once the review is complete.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
                             <>
                               <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                                 <div className="flex gap-3">
                                   <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
                                   <div>
                                     <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                                      Why get verified?
+                                      Get Verified to Apply for Jobs
                                     </h4>
+                                    <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+                                      You must complete verification to apply for jobs. Submit the required documents below:
+                                    </p>
                                     <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                                      <li>• Increase your profile visibility</li>
-                                      <li>• Build trust with clients</li>
-                                      <li>• Get more job opportunities</li>
-                                      <li>• Stand out from other helpers</li>
+                                      <li>• National ID (NID) number (Required)</li>
+                                      <li>• NID photo (Required)</li>
+                                      <li>• At least one certificate or license (Required)</li>
                                     </ul>
                                   </div>
                                 </div>
@@ -597,85 +761,100 @@ export default function ProfilePage() {
 
                               <div className="space-y-4">
                                 <div className="space-y-2">
-                                  <Label htmlFor="certificates">
-                                    Certificates / Licenses (Optional)
-                                  </Label>
-                                  <p className="text-xs text-muted-foreground">
-                                    Upload relevant certificates, licenses, or training documents
-                                  </p>
-                                  <div className="border-2 border-dashed border-border rounded-lg p-6 hover:border-primary transition-colors">
-                                    <label
-                                      htmlFor="certificates"
-                                      className="flex flex-col items-center justify-center cursor-pointer"
-                                    >
-                                      <Upload className="h-10 w-10 text-muted-foreground mb-2" />
-                                      <span className="text-sm font-medium">Click to upload documents</span>
-                                      <span className="text-xs text-muted-foreground mt-1">
-                                        PDF, JPG, PNG (Max 5MB each)
-                                      </span>
-                                      <input
-                                        id="certificates"
-                                        type="file"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                        multiple
-                                        className="hidden"
-                                        onChange={(e) => {
-                                          // Handle certificate upload
-                                          toast.success("Certificate uploaded! Pending admin review.")
-                                        }}
-                                      />
-                                    </label>
-                                  </div>
+                                  <Label htmlFor="nidNumber">NID Number *</Label>
+                                  <Input
+                                    id="nidNumber"
+                                    placeholder="Enter your NID number"
+                                    value={verificationForm.nidNumber}
+                                    onChange={(e) => setVerificationForm({ ...verificationForm, nidNumber: e.target.value })}
+                                  />
                                 </div>
 
                                 <div className="space-y-2">
-                                  <Label htmlFor="portfolio">
-                                    Portfolio / Work Samples (Optional)
-                                  </Label>
-                                  <p className="text-xs text-muted-foreground">
-                                    Upload photos of your previous work
-                                  </p>
-                                  <div className="border-2 border-dashed border-border rounded-lg p-6 hover:border-primary transition-colors">
-                                    <label
-                                      htmlFor="portfolio"
-                                      className="flex flex-col items-center justify-center cursor-pointer"
-                                    >
-                                      <Upload className="h-10 w-10 text-muted-foreground mb-2" />
-                                      <span className="text-sm font-medium">Click to upload photos</span>
-                                      <span className="text-xs text-muted-foreground mt-1">
-                                        JPG, PNG (Max 5MB each)
-                                      </span>
-                                      <input
-                                        id="portfolio"
-                                        type="file"
-                                        accept=".jpg,.jpeg,.png"
-                                        multiple
-                                        className="hidden"
-                                        onChange={(e) => {
-                                          // Handle portfolio upload
-                                          toast.success("Portfolio uploaded! Pending admin review.")
+                                  <Label>NID Photo *</Label>
+                                  {nidPhotoPreview ? (
+                                    <div className="relative border rounded-lg overflow-hidden">
+                                      <img src={nidPhotoPreview} alt="NID Preview" className="w-full h-48 object-contain" />
+                                      <Button
+                                        type="button"
+                                        variant="destructive"
+                                        size="sm"
+                                        className="absolute top-2 right-2"
+                                        onClick={() => {
+                                          setVerificationForm({ ...verificationForm, nidPhoto: null })
+                                          setNidPhotoPreview(null)
                                         }}
+                                      >
+                                        Remove
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <label htmlFor="nidPhoto" className="border-2 border-dashed border-border rounded-lg p-6 hover:border-primary transition-colors cursor-pointer flex flex-col items-center">
+                                      <Upload className="h-10 w-10 text-muted-foreground mb-2" />
+                                      <span className="text-sm font-medium">Click to upload NID photo</span>
+                                      <span className="text-xs text-muted-foreground mt-1">JPG, PNG (Max 5MB)</span>
+                                      <input
+                                        id="nidPhoto"
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={handleNidPhotoChange}
                                       />
                                     </label>
-                                  </div>
+                                  )}
                                 </div>
 
-                                <Button className="w-full" size="lg">
-                                  <Shield className="mr-2 h-4 w-4" />
-                                  Submit for Verification
+                                <div className="space-y-2">
+                                  <Label>Certificates / Licenses * (At least one required)</Label>
+                                  <p className="text-xs text-muted-foreground">
+                                    Upload certificates related to your skills (e.g., plumbing license, electrical certificate)
+                                  </p>
+                                  
+                                  {certificatePreviews.length > 0 && (
+                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                      {certificatePreviews.map((preview, index) => (
+                                        <div key={index} className="relative border rounded-lg overflow-hidden">
+                                          <img src={preview} alt={`Certificate ${index + 1}`} className="w-full h-32 object-cover" />
+                                          <Button
+                                            type="button"
+                                            variant="destructive"
+                                            size="sm"
+                                            className="absolute top-2 right-2"
+                                            onClick={() => removeCertificate(index)}
+                                          >
+                                            Remove
+                                          </Button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  <label htmlFor="certificates" className="border-2 border-dashed border-border rounded-lg p-6 hover:border-primary transition-colors cursor-pointer flex flex-col items-center">
+                                    <Upload className="h-10 w-10 text-muted-foreground mb-2" />
+                                    <span className="text-sm font-medium">
+                                      {certificatePreviews.length > 0 ? "Add another certificate" : "Click to upload certificates"}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground mt-1">JPG, PNG, PDF (Max 5MB each)</span>
+                                    <input
+                                      id="certificates"
+                                      type="file"
+                                      accept="image/*,.pdf"
+                                      multiple
+                                      className="hidden"
+                                      onChange={handleCertificateChange}
+                                    />
+                                  </label>
+                                </div>
+
+                                <Button
+                                  onClick={handleSubmitVerification}
+                                  disabled={isSubmittingVerification}
+                                  className="w-full"
+                                >
+                                  {isSubmittingVerification ? "Submitting..." : "Submit for Verification"}
                                 </Button>
                               </div>
-                            </>  
-                          ) : (
-                            <div className="text-center py-8">
-                              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 mb-4">
-                                <Shield className="h-8 w-8 text-green-600 dark:text-green-400" />
-                              </div>
-                              <h4 className="text-lg font-semibold mb-2">You are verified!</h4>
-                              <p className="text-sm text-muted-foreground">
-                                Your profile has been verified by our admin team.
-                              </p>
-                            </div>
+                            </>
                           )}
                         </div>
                       </Card>

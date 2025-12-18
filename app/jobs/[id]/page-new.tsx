@@ -1,17 +1,17 @@
 "use client"
 
-import { useState, useEffect, use } from "react"
+import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { PhotoSlider } from "@/components/photo-slider"
-import { MapPin, DollarSign, Clock, Lightbulb, Users, Star, CheckCircle, ArrowLeft, Loader2 } from "lucide-react"
-import Link from "next/link"
-import { toast } from "sonner"
-import { useRouter } from "next/navigation"
 import { VerifiedBadge } from "@/components/verified-badge"
+import { MapPin, DollarSign, Clock, Lightbulb, Users, Star, CheckCircle, ArrowLeft } from "lucide-react"
+import Link from "next/link"
+import { toast } from "react-hot-toast"
+import { useRouter } from "next/navigation"
 
 // Mock data for nearby helpers (will be implemented later)
 const nearbyHelpers = [
@@ -77,32 +77,25 @@ interface Job {
   }
 }
 
-export default function JobDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params)
+export default function JobDetailsPage({ params }: { params: { id: string } }) {
   const { data: session } = useSession()
   const router = useRouter()
   const [job, setJob] = useState<Job | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isApplying, setIsApplying] = useState(false)
-  const [aiGenerating, setAiGenerating] = useState(false)
-  const [aiRetryCount, setAiRetryCount] = useState(0)
 
   useEffect(() => {
     fetchJobDetails()
-  }, [resolvedParams.id])
+  }, [params.id])
 
   const fetchJobDetails = async () => {
     try {
       setIsLoading(true)
-      const response = await fetch(`/api/jobs/${resolvedParams.id}`)
+      const response = await fetch(`/api/jobs/${params.id}`)
       const data = await response.json()
 
       if (response.ok) {
         setJob(data.job)
-        // Check if AI analysis is missing and trigger generation
-        if (!data.job.aiAnalysis) {
-          generateAIAnalysis(data.job._id)
-        }
       } else {
         toast.error("Job not found")
         router.push("/job-board")
@@ -112,42 +105,6 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
       toast.error("Failed to load job details")
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  const generateAIAnalysis = async (jobId: string, attempt = 1) => {
-    if (attempt > 3) {
-      toast.error("Failed to generate AI analysis after 3 attempts")
-      return
-    }
-
-    try {
-      setAiGenerating(true)
-      setAiRetryCount(attempt)
-      
-      const response = await fetch("/api/jobs/ai-analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.aiAnalysis) {
-        setJob((prev) => (prev ? { ...prev, aiAnalysis: data.aiAnalysis } : null))
-        setAiGenerating(false)
-        if (attempt > 1) {
-          toast.success("AI analysis generated successfully!")
-        }
-      } else {
-        // Retry if failed
-        console.log(`AI generation attempt ${attempt} failed, retrying...`)
-        setTimeout(() => generateAIAnalysis(jobId, attempt + 1), 2000)
-      }
-    } catch (error) {
-      console.error("Error generating AI analysis:", error)
-      // Retry on error
-      setTimeout(() => generateAIAnalysis(jobId, attempt + 1), 2000)
     }
   }
 
@@ -179,7 +136,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
     setIsApplying(true)
     setTimeout(() => {
       toast.success("Application sent successfully!")
-      router.push(`/jobs/${resolvedParams.id}/timeline`)
+      router.push(`/jobs/${params.id}/timeline`)
       setIsApplying(false)
     }, 1500)
   }
@@ -187,26 +144,16 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
   const handleHireHelper = (helperId: string) => {
     toast.success("Helper hired! Redirecting to job timeline...")
     setTimeout(() => {
-      router.push(`/jobs/${resolvedParams.id}/timeline`)
+      router.push(`/jobs/${params.id}/timeline`)
     }, 1000)
   }
 
-  if (isLoading) {
+  if (isLoading || !job) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
           <p className="mt-4 text-muted-foreground">Loading job details...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!job) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <p className="text-muted-foreground">Job not found</p>
         </div>
       </div>
     )
@@ -216,11 +163,11 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
     <div className="min-h-screen bg-muted/30 py-8">
       <div className="container mx-auto max-w-6xl px-4">
         <Link
-          href="/home"
+          href="/job-board"
           className="mb-6 inline-flex items-center text-sm text-muted-foreground transition-colors hover:text-primary"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to feed
+          Back to jobs
         </Link>
 
         <div className="grid gap-8 lg:grid-cols-3">
@@ -232,28 +179,26 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
               <div className="flex items-start justify-between border-b border-border bg-muted/30 p-6">
                 <div className="flex items-center space-x-3">
                   <Avatar className="h-14 w-14 ring-2 ring-border">
-                    <AvatarImage src={job.helpSeeker.profilePhoto || "/placeholder.svg"} />
+                    <AvatarImage src={job.helpSeeker?.profilePhoto || "/placeholder.svg"} />
                     <AvatarFallback className="bg-primary text-primary-foreground">
-                      {job.helpSeeker.name.charAt(0)}
+                      {job.helpSeeker?.name.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <h3 className="text-lg font-bold">{job.helpSeeker.name}</h3>
+                    <h3 className="text-lg font-bold">{job.helpSeeker?.name}</h3>
                     <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                       <Clock className="h-3.5 w-3.5" />
                       <span>Posted {getTimeAgo(job.createdAt)}</span>
                     </div>
                   </div>
                 </div>
-                <Badge className="bg-primary text-primary-foreground">
-                  {job.status === "open" ? "Open" : "Closed"}
-                </Badge>
+                <Badge className="bg-primary text-primary-foreground capitalize">{job.status}</Badge>
               </div>
 
-              {/* Job Photos */}
+              {/* Job Images */}
               {job.photos && job.photos.length > 0 && (
-                <div className="relative">
-                  <PhotoSlider photos={job.photos} />
+                <div className="p-6 pb-0">
+                  <PhotoSlider photos={job.photos} alt={job.title} />
                 </div>
               )}
 
@@ -266,7 +211,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
 
                 <div className="space-y-2">
                   <h3 className="text-lg font-bold">Description</h3>
-                  <p className="text-muted-foreground leading-relaxed">{job.description}</p>
+                  <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{job.description}</p>
                 </div>
 
                 <div className="flex flex-wrap gap-6">
@@ -284,10 +229,8 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
                       <DollarSign className="h-5 w-5 text-accent" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Budget</p>
-                      <p className="font-bold">
-                        ৳{job.budget.min} - ৳{job.budget.max}
-                      </p>
+                      <p className="text-sm text-muted-foreground">Budget Range</p>
+                      <p className="font-bold">৳{job.budget.min} - ৳{job.budget.max}</p>
                     </div>
                   </div>
                 </div>
@@ -302,64 +245,58 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
               </div>
             </Card>
 
-            {/* AI Suggestions */}
-            <Card className="overflow-hidden shadow-xl animate-fade-in-up animation-delay-200">
-              <div className="border-b border-border bg-accent/5 p-6">
-                <div className="flex items-center space-x-3">
-                  <div className="rounded-full bg-accent p-3">
-                    <Lightbulb className="h-6 w-6 text-accent-foreground" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold">AI Assistant</h2>
-                    <p className="text-sm text-muted-foreground">Quick DIY solutions you can try</p>
+            {/* AI Assistant */}
+            {job.aiAnalysis && (
+              <Card className="overflow-hidden shadow-xl animate-fade-in-up animation-delay-200">
+                <div className="border-b border-border bg-accent/5 p-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="rounded-full bg-accent p-3">
+                      <Lightbulb className="h-6 w-6 text-accent-foreground" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold">AI Assistant</h2>
+                      <p className="text-sm text-muted-foreground">Quick DIY solutions you can try</p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="space-y-4 p-6">
-                {aiGenerating ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
-                    <h3 className="font-bold text-lg mb-2">AI Analysis Generating...</h3>
+                <div className="space-y-4 p-6">
+                  <div className="space-y-2">
+                    <h3 className="font-bold">Problem Analysis</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{job.aiAnalysis.problemAnalysis}</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="font-bold">Steps to Solve</h3>
+                    {job.aiAnalysis.steps.map((step, index) => (
+                      <div key={index} className="flex items-start space-x-3 rounded-lg bg-muted/50 p-4">
+                        <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-bold text-sm mb-1">{step.order}</h4>
+                          <p className="text-sm text-muted-foreground">{step.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-lg border border-accent/30 bg-accent/5 p-4">
                     <p className="text-sm text-muted-foreground">
-                      {aiRetryCount > 1 ? `Attempt ${aiRetryCount} of 3` : "Please wait while we analyze the problem"}
+                      <strong className="text-foreground">Estimated Cost to Hire Professional:</strong>{" "}
+                      {job.aiAnalysis.budget}
                     </p>
                   </div>
-                ) : job.aiAnalysis ? (
-                  <>
-                    <div className="space-y-2">
-                      <h3 className="font-bold">Problem Analysis</h3>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        {job.aiAnalysis.problemAnalysis}
-                      </p>
-                    </div>
+                </div>
+              </Card>
+            )}
 
-                    <div className="space-y-3">
-                      {job.aiAnalysis.steps.map((step, index) => (
-                        <div key={index} className="flex items-start space-x-3 rounded-lg bg-muted/50 p-4">
-                          <div className="mt-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                            {index + 1}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm text-muted-foreground">{step.description}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="rounded-lg border border-accent/30 bg-accent/5 p-4">
-                      <p className="text-sm text-muted-foreground">
-                        <strong className="text-foreground">Estimated Cost:</strong> {job.aiAnalysis.budget}
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">AI analysis not available</p>
-                  </div>
-                )}
-              </div>
-            </Card>
+            {!job.aiAnalysis && (
+              <Card className="p-6 text-center">
+                <Lightbulb className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                <p className="text-muted-foreground">AI analysis is being generated...</p>
+              </Card>
+            )}
           </div>
 
           {/* Sidebar - Nearby Helpers */}
@@ -401,7 +338,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
                         </div>
                       </div>
                       <Badge variant="secondary" className="whitespace-nowrap">
-                        ${helper.hourlyRate}/hr
+                        ৳{helper.hourlyRate}/hr
                       </Badge>
                     </div>
 

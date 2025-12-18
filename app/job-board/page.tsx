@@ -1,191 +1,137 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { PlusCircle, MapPin, DollarSign, Clock } from "lucide-react"
-import Link from "next/link"
 import { CreateJobDialog } from "@/components/create-job-dialog"
-
-// Mock data for job posts
-const mockJobs = [
-  {
-    id: "1",
-    user: {
-      name: "Sarah Johnson",
-      avatar: "/placeholder.svg?key=user1",
-    },
-    title: "Need plumber for leaking pipe",
-    description: "My kitchen sink has been leaking for 2 days. Need urgent help to fix it.",
-    image: "/placeholder.svg?key=plumb1",
-    location: "Downtown, Main Street",
-    budgetMin: 40,
-    budgetMax: 60,
-    category: "Plumbing",
-    postedAt: "2 hours ago",
-    status: "Open",
-  },
-  {
-    id: "2",
-    user: {
-      name: "Michael Chen",
-      avatar: "/placeholder.svg?key=user2",
-    },
-    title: "Furniture assembly needed",
-    description: "Bought a new wardrobe from IKEA. Need someone experienced to assemble it.",
-    image: "/placeholder.svg?key=furn1",
-    location: "Suburbs, Oak Avenue",
-    budgetMin: 60,
-    budgetMax: 90,
-    category: "Handyman",
-    postedAt: "5 hours ago",
-    status: "Open",
-  },
-  {
-    id: "3",
-    user: {
-      name: "Emily Rodriguez",
-      avatar: "/placeholder.svg?key=user3",
-    },
-    title: "Deep cleaning service required",
-    description: "Moving to a new apartment next week. Need deep cleaning of the current one.",
-    image: "/placeholder.svg?key=clean1",
-    location: "City Center, Park Road",
-    budgetMin: 100,
-    budgetMax: 150,
-    category: "Cleaning",
-    postedAt: "1 day ago",
-    status: "Open",
-  },
-  {
-    id: "4",
-    user: {
-      name: "David Kim",
-      avatar: "/placeholder.svg?key=user4",
-    },
-    title: "Electrical outlet installation",
-    description: "Need to install 3 new electrical outlets in my home office.",
-    image: "/placeholder.svg?key=elec1",
-    location: "West End, Maple Street",
-    budgetMin: 80,
-    budgetMax: 120,
-    category: "Electrical",
-    postedAt: "2 days ago",
-    status: "Open",
-  },
-]
+import { CreatePostSection } from "@/components/job-board/create-post-section"
+import { JobPostCard, type JobPost } from "@/components/job-board/job-post-card"
+import { toast } from "sonner"
 
 export default function JobBoardPage() {
+  const { data: session } = useSession()
   const [isCreateJobOpen, setIsCreateJobOpen] = useState(false)
-  const [jobs, setJobs] = useState(mockJobs)
+  const [jobs, setJobs] = useState<JobPost[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+
+  useEffect(() => {
+    fetchJobs()
+  }, [])
+
+  const fetchJobs = async (pageNum = 1) => {
+    try {
+      setIsLoading(true)
+      const response = await fetch(`/api/jobs?page=${pageNum}&limit=10`)
+      const data = await response.json()
+
+      if (response.ok) {
+        const formattedJobs: JobPost[] = data.jobs.map((job: any) => ({
+          id: job._id,
+          user: {
+            name: job.helpSeeker?.name || "Unknown User",
+            avatar: job.helpSeeker?.profilePhoto,
+          },
+          title: job.title,
+          description: job.description,
+          image: job.photos[0], // First photo as main image
+          location: job.location,
+          budgetMin: job.budget?.min,
+          budgetMax: job.budget?.max,
+          category: job.category,
+          postedAt: getTimeAgo(job.createdAt),
+          status: job.status === "open" ? "Open" : "Closed",
+        }))
+
+        if (pageNum === 1) {
+          setJobs(formattedJobs)
+        } else {
+          setJobs((prev) => [...prev, ...formattedJobs])
+        }
+
+        setHasMore(data.pagination.page < data.pagination.pages)
+        setPage(pageNum)
+      } else {
+        toast.error("Failed to load jobs")
+      }
+    } catch (error) {
+      console.error("Error fetching jobs:", error)
+      toast.error("An error occurred while loading jobs")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const getTimeAgo = (date: string) => {
+    const now = new Date()
+    const posted = new Date(date)
+    const diff = Math.floor((now.getTime() - posted.getTime()) / 1000)
+
+    if (diff < 60) return "Just now"
+    if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`
+    if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`
+    return posted.toLocaleDateString()
+  }
+
+  const handleJobCreated = () => {
+    fetchJobs(1) // Refresh jobs list
+  }
+
+  const handleLoadMore = () => {
+    fetchJobs(page + 1)
+  }
+
+  if (isLoading && jobs.length === 0) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading jobs...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-muted/30 py-4">
       <div className="container mx-auto max-w-4xl px-4">
         {/* Create Job Section */}
-        <Card className="mb-6 p-6 shadow-lg animate-fade-in-up">
-          <div className="flex items-center space-x-4">
-            <Avatar className="h-12 w-12">
-              <AvatarImage src="/placeholder.svg?key=currentuser" />
-              <AvatarFallback className="bg-primary text-primary-foreground">U</AvatarFallback>
-            </Avatar>
-            <Button
-              onClick={() => setIsCreateJobOpen(true)}
-              variant="outline"
-              className="flex-1 justify-start text-muted-foreground transition-all duration-300 hover:scale-[1.02] hover:bg-background"
-            >
-              <PlusCircle className="mr-2 h-5 w-5" />
-              Need help? Post a job...
-            </Button>
-          </div>
-        </Card>
+        <CreatePostSection
+          userAvatar={session?.user?.profilePhoto}
+          userName={session?.user?.name || undefined}
+          onCreateClick={() => setIsCreateJobOpen(true)}
+        />
 
         {/* Job Feed */}
         <div className="space-y-4">
-          {jobs.map((job, index) => (
-            <Card
-              key={job.id}
-              className="overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-primary animate-fade-in-up"
-              style={{ animationDelay: `${index * 100}ms` }}
-            >
-              {/* Job Header */}
-              <div className="flex items-start justify-between p-4 pb-3">
-                <div className="flex items-center space-x-3">
-                  <Avatar className="h-10 w-10 ring-2 ring-border">
-                    <AvatarImage src={job.user.avatar || "/placeholder.svg"} />
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      {job.user.name.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="font-bold text-sm">{job.user.name}</h3>
-                    <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      <span>{job.postedAt}</span>
-                    </div>
-                  </div>
-                </div>
-                <Badge className="bg-primary text-primary-foreground">{job.category}</Badge>
-              </div>
-
-              {/* Job Content */}
-              <div className="px-4 pb-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <h2 className="text-lg font-bold mb-2">{job.title}</h2>
-                    <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4 text-primary flex-shrink-0" />
-                      <span>{job.location}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-1 text-sm font-bold text-primary whitespace-nowrap">
-                    <DollarSign className="h-4 w-4" />
-                    <span>
-                      ${job.budgetMin} - ${job.budgetMax}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Job Image */}
-              {job.image && (
-                <div className="relative aspect-video overflow-hidden bg-muted">
-                  <img
-                    src={job.image || "/placeholder.svg"}
-                    alt={job.title}
-                    className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
-                  />
-                </div>
-              )}
-
-              {/* Apply Button */}
-              <div className="p-4">
-                <Button asChild className="w-full transition-all duration-300 hover:scale-[1.02] hover:shadow-lg">
-                  <Link href={`/jobs/${job.id}`}>View Details & Apply</Link>
-                </Button>
-              </div>
-            </Card>
-          ))}
+          {jobs.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">No jobs posted yet. Be the first to post!</p>
+            </div>
+          ) : (
+            jobs.map((job, index) => <JobPostCard key={job.id} job={job} index={index} />)
+          )}
         </div>
 
         {/* Load More */}
-        <div className="mt-6 text-center">
-          <Button
-            variant="outline"
-            className="transition-all duration-300 hover:scale-105 bg-transparent"
-            onClick={() => {
-              // TODO: Load more jobs
-            }}
-          >
-            Load More Jobs
-          </Button>
-        </div>
+        {hasMore && jobs.length > 0 && (
+          <div className="mt-6 text-center">
+            <Button
+              variant="outline"
+              className="transition-all duration-300 hover:scale-105 bg-transparent"
+              onClick={handleLoadMore}
+              disabled={isLoading}
+            >
+              {isLoading ? "Loading..." : "Load More Jobs"}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Create Job Dialog */}
-      <CreateJobDialog open={isCreateJobOpen} onOpenChange={setIsCreateJobOpen} />
+      <CreateJobDialog open={isCreateJobOpen} onOpenChange={setIsCreateJobOpen} onJobCreated={handleJobCreated} />
     </div>
   )
 }
