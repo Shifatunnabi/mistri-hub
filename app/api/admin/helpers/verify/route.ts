@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import connectDB from "@/lib/mongodb"
 import User from "@/models/User"
+import { createNotification } from "@/lib/notifications"
 
 // GET - Fetch pending verification requests
 export async function GET(req: NextRequest) {
@@ -64,6 +65,15 @@ export async function POST(req: NextRequest) {
       helper.verificationStatus = "verified"
       await helper.save()
 
+      // Send verification success notification
+      await createNotification({
+        userId: helper._id.toString(),
+        type: "verification_update",
+        title: "Verification Successful! ✓",
+        message: "Congratulations! Your helper profile has been verified. You can now apply for jobs.",
+        link: "/profile",
+      })
+
       return NextResponse.json(
         {
           message: "Helper verified successfully!",
@@ -86,6 +96,15 @@ export async function POST(req: NextRequest) {
         helper.helperProfile.verificationDocuments = []
       }
       await helper.save()
+
+      // Send verification rejection notification
+      await createNotification({
+        userId: helper._id.toString(),
+        type: "verification_update",
+        title: "Verification Update",
+        message: "Your verification request has been reviewed. Please resubmit your documents with correct information.",
+        link: "/profile",
+      })
 
       return NextResponse.json(
         {

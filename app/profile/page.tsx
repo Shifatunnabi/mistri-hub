@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 import { toast } from "react-hot-toast"
 import { VerifiedBadge } from "@/components/verified-badge"
+import { PostedJobsTab } from "@/components/profile/posted-jobs-tab"
 
 interface UserData {
   _id: string
@@ -62,6 +63,10 @@ export default function ProfilePage() {
   const [userData, setUserData] = useState<UserData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [postedJobs, setPostedJobs] = useState<any[]>([])
+  const [reviews, setReviews] = useState<any[]>([])
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false)
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false)
   
   // Verification form state
   const [verificationForm, setVerificationForm] = useState({
@@ -120,6 +125,54 @@ export default function ProfilePage() {
 
     fetchUserData()
   }, [status])
+
+  // Fetch posted jobs
+  const fetchPostedJobs = async () => {
+    if (!userData?._id) return
+    
+    setIsLoadingJobs(true)
+    try {
+      const response = await fetch(`/api/jobs?helpSeeker=${userData._id}`)
+      const data = await response.json()
+      
+      if (response.ok) {
+        setPostedJobs(data.jobs || [])
+      }
+    } catch (error) {
+      console.error("Error fetching posted jobs:", error)
+    } finally {
+      setIsLoadingJobs(false)
+    }
+  }
+
+  // Fetch reviews for helper
+  const fetchReviews = async () => {
+    if (!userData?._id || userData.role !== "HELPER") return
+    
+    setIsLoadingReviews(true)
+    try {
+      const response = await fetch(`/api/reviews?helperId=${userData._id}`)
+      const data = await response.json()
+      
+      if (response.ok) {
+        setReviews(data.reviews || [])
+      }
+    } catch (error) {
+      console.error("Error fetching reviews:", error)
+    } finally {
+      setIsLoadingReviews(false)
+    }
+  }
+
+  // Fetch jobs and reviews when userData is available
+  useEffect(() => {
+    if (userData) {
+      fetchPostedJobs()
+      if (userData.role === "HELPER") {
+        fetchReviews()
+      }
+    }
+  }, [userData])
 
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -433,8 +486,9 @@ export default function ProfilePage() {
           {/* Main Content */}
           <div className="lg:col-span-2">
             <Tabs defaultValue="personal" className="space-y-6">
-              <TabsList className={`grid w-full ${userData.role === "HELPER" ? "grid-cols-2" : "grid-cols-1"}`}>
+              <TabsList className={`grid w-full ${userData.role === "HELPER" ? "grid-cols-3" : "grid-cols-2"}`}>
                 <TabsTrigger value="personal">Personal Info</TabsTrigger>
+                <TabsTrigger value="posted-jobs">Posted Jobs</TabsTrigger>
                 {userData.role === "HELPER" && (
                   <TabsTrigger value="helper">
                     Helper Profile
@@ -604,6 +658,23 @@ export default function ProfilePage() {
                         </div>
                       </>
                     )}
+                  </div>
+                </Card>
+              </TabsContent>
+
+              {/* Posted Jobs Tab */}
+              <TabsContent value="posted-jobs">
+                <Card className="shadow-xl animate-fade-in-up">
+                  <div className="border-b border-border p-6">
+                    <h3 className="text-xl font-bold">My Posted Jobs</h3>
+                    <p className="text-sm text-muted-foreground">Jobs you have posted</p>
+                  </div>
+                  <div className="p-6">
+                    <PostedJobsTab 
+                      jobs={postedJobs} 
+                      isLoading={isLoadingJobs}
+                      onJobUpdated={fetchPostedJobs}
+                    />
                   </div>
                 </Card>
               </TabsContent>
@@ -855,6 +926,77 @@ export default function ProfilePage() {
                                 </Button>
                               </div>
                             </>
+                          )}
+                        </div>
+                      </Card>
+                    )}
+
+                    {/* Reviews Section */}
+                    {userData.isVerified && (
+                      <Card className="shadow-xl animate-fade-in-up">
+                        <div className="border-b border-border p-6">
+                          <h3 className="text-xl font-bold">Reviews</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {reviews.length} review{reviews.length !== 1 ? 's' : ''} from help seekers
+                          </p>
+                        </div>
+                        <div className="p-6">
+                          {isLoadingReviews ? (
+                            <div className="flex items-center justify-center py-12">
+                              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                            </div>
+                          ) : reviews.length > 0 ? (
+                            <div className="space-y-4">
+                              {reviews.map((review: any, index: number) => (
+                                <Card key={review._id || index} className="p-4">
+                                  <div className="flex items-start gap-4">
+                                    <Avatar className="h-10 w-10">
+                                      <AvatarImage src={review.reviewer?.profilePhoto || "/placeholder.svg"} />
+                                      <AvatarFallback>
+                                        {review.reviewer?.name?.charAt(0) || 'U'}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 space-y-2">
+                                      <div className="flex items-center justify-between">
+                                        <div>
+                                          <p className="font-semibold">{review.reviewer?.name || 'Anonymous'}</p>
+                                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                            {review.job?.title && (
+                                              <span>for "{review.job.title}"</span>
+                                            )}
+                                            <span>•</span>
+                                            <span>{new Date(review.createdAt).toLocaleDateString()}</span>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          {Array.from({ length: 5 }).map((_, i) => (
+                                            <Star
+                                              key={i}
+                                              className={`h-4 w-4 ${
+                                                i < review.rating
+                                                  ? 'fill-yellow-400 text-yellow-400'
+                                                  : 'text-muted-foreground'
+                                              }`}
+                                            />
+                                          ))}
+                                        </div>
+                                      </div>
+                                      <p className="text-sm text-muted-foreground leading-relaxed">
+                                        {review.comment}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </Card>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="py-12 text-center">
+                              <Star className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
+                              <p className="mt-4 text-muted-foreground">No reviews yet</p>
+                              <p className="text-sm text-muted-foreground">
+                                Complete jobs to start receiving reviews
+                              </p>
+                            </div>
                           )}
                         </div>
                       </Card>

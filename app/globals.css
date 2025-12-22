@@ -214,3 +214,13 @@
 .animate-scale-in {
   animation: scale-in 0.5s ease-out forwards;
 }
+
+.animation-delay-200 {
+  animation-delay: 200ms;
+  opacity: 0;
+}
+
+.animation-delay-300 {
+  animation-delay: 300ms;
+  opacity: 0;
+}

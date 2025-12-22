@@ -4,6 +4,7 @@ import connectDB from "@/lib/mongodb"
 import User from "@/models/User"
 import { HelperRegisterSchema } from "@/lib/validations/auth"
 import { ZodError } from "zod"
+import { createNotification } from "@/lib/notifications"
 
 export async function POST(req: NextRequest) {
   try {
@@ -43,6 +44,15 @@ export async function POST(req: NextRequest) {
         completedJobs: 0,
         verificationDocuments: [],
       },
+    })
+
+    // Send welcome notification
+    await createNotification({
+      userId: newHelper._id.toString(),
+      type: "welcome",
+      title: "Welcome to MistriHub! 👋",
+      message: "Thank you for joining as a Helper! Your account is pending admin approval. Once approved, you can verify your profile and start applying for jobs.",
+      link: "/profile",
     })
 
     // Remove password from response

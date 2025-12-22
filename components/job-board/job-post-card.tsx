@@ -29,6 +29,43 @@ interface JobPostCardProps {
   index?: number
 }
 
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "open":
+    case "Open":
+      return "bg-green-500 text-white"
+    case "assigned":
+    case "scheduled":
+    case "in_progress":
+      return "bg-blue-500 text-white"
+    case "pending_review":
+      return "bg-yellow-500 text-white"
+    case "completed":
+      return "bg-gray-500 text-white"
+    default:
+      return "bg-primary text-primary-foreground"
+  }
+}
+
+const getStatusLabel = (status: string) => {
+  switch (status) {
+    case "open":
+      return "Open"
+    case "assigned":
+      return "Assigned"
+    case "scheduled":
+      return "Scheduled"
+    case "in_progress":
+      return "In Progress"
+    case "pending_review":
+      return "Pending Review"
+    case "completed":
+      return "Completed"
+    default:
+      return status
+  }
+}
+
 export function JobPostCard({ job, index = 0 }: JobPostCardProps) {
   return (
     <Card
@@ -52,7 +89,7 @@ export function JobPostCard({ job, index = 0 }: JobPostCardProps) {
             </div>
           </div>
         </div>
-        <Badge className="bg-primary text-primary-foreground">{job.category}</Badge>
+        <Badge className={getStatusColor(job.status)}>{getStatusLabel(job.status)}</Badge>
       </div>
 
       {/* Job Content */}

@@ -15,6 +15,8 @@ export interface IUser extends Document {
   isVerified: boolean // For HELPER verification badge
   isBanned: boolean
   verificationStatus?: string // For tracking verification submission status
+  averageRating: number // Overall rating for helpers
+  totalReviews: number // Total number of reviews received
   createdAt: Date
   updatedAt: Date
 
@@ -31,6 +33,11 @@ export interface IUser extends Document {
     nidNumber?: string
     nidPhoto?: string
     verificationDocuments: string[]
+  }
+  
+  // Deprecated - keeping for backward compatibility
+  helperVerification?: {
+    isVerified: boolean
   }
 }
 
@@ -92,6 +99,16 @@ const UserSchema = new Schema<IUser>(
       type: String,
       enum: ["none", "pending", "verified", "rejected"],
       default: "none",
+    },
+    averageRating: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+    totalReviews: {
+      type: Number,
+      default: 0,
     },
     helperProfile: {
       skills: {

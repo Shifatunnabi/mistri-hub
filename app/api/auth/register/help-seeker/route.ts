@@ -4,6 +4,7 @@ import connectDB from "@/lib/mongodb"
 import User from "@/models/User"
 import { HelpSeekerRegisterSchema } from "@/lib/validations/auth"
 import { ZodError } from "zod"
+import { createNotification } from "@/lib/notifications"
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,6 +33,15 @@ export async function POST(req: NextRequest) {
       address: validatedData.address,
       role: "HELP_SEEKER",
       isApproved: true, // Auto-approve help seekers
+    })
+
+    // Send welcome notification
+    await createNotification({
+      userId: newUser._id.toString(),
+      type: "welcome",
+      title: "Welcome to MistriHub! 👋",
+      message: "Thank you for joining MistriHub! You can now post jobs and find skilled helpers in your area.",
+      link: "/job-board",
     })
 
     // Remove password from response

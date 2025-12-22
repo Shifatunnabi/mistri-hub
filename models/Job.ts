@@ -12,7 +12,13 @@ export interface IJob extends Document {
   location: string
   photos: string[]
   helpSeeker: mongoose.Types.ObjectId
-  status: "open" | "hired" | "completed" | "cancelled"
+  assignedHelper?: mongoose.Types.ObjectId
+  status: "open" | "assigned" | "scheduled" | "in_progress" | "pending_review" | "completed"
+  applicationCount: number
+  scheduledDate?: Date
+  startedAt?: Date
+  completedAt?: Date
+  confirmedAt?: Date
   aiAnalysis?: {
     problemAnalysis: string
     steps: Array<{
@@ -76,10 +82,35 @@ const JobSchema = new Schema<IJob>(
       ref: "User",
       required: [true, "Help seeker is required"],
     },
+    assignedHelper: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     status: {
       type: String,
-      enum: ["open", "hired", "completed", "cancelled"],
+      enum: ["open", "assigned", "scheduled", "in_progress", "pending_review", "completed"],
       default: "open",
+    },
+    applicationCount: {
+      type: Number,
+      default: 0,
+    },
+    scheduledDate: {
+      type: Date,
+      default: null,
+    },
+    startedAt: {
+      type: Date,
+      default: null,
+    },
+    completedAt: {
+      type: Date,
+      default: null,
+    },
+    confirmedAt: {
+      type: Date,
+      default: null,
     },
     aiAnalysis: {
       problemAnalysis: {
@@ -103,8 +134,9 @@ const JobSchema = new Schema<IJob>(
 
 // Indexes for better query performance
 JobSchema.index({ helpSeeker: 1, createdAt: -1 })
+JobSchema.index({ assignedHelper: 1 })
 JobSchema.index({ status: 1, createdAt: -1 })
-JobSchema.index({ category: 1, createdAt: -1 })
+JobSchema.index({ category: 1, status: 1, createdAt: -1 })
 
 const Job: Model<IJob> = mongoose.models.Job || mongoose.model<IJob>("Job", JobSchema)
 

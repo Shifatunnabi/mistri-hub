@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { PhotoSlider } from "@/components/photo-slider"
 import { MapPin, DollarSign, Clock, Lightbulb, Users, Star, CheckCircle, ArrowLeft, Loader2 } from "lucide-react"
 import Link from "next/link"
-import { toast } from "sonner"
+import toast from "react-hot-toast"
 import { useRouter } from "next/navigation"
 import { VerifiedBadge } from "@/components/verified-badge"
 
@@ -62,6 +62,7 @@ interface Job {
   location: string
   photos: string[]
   status: string
+  applicationCount: number
   createdAt: string
   helpSeeker: {
     name: string
@@ -86,6 +87,8 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
   const [isApplying, setIsApplying] = useState(false)
   const [aiGenerating, setAiGenerating] = useState(false)
   const [aiRetryCount, setAiRetryCount] = useState(0)
+  const [hasApplied, setHasApplied] = useState(false)
+  const [applicationStatus, setApplicationStatus] = useState<string | null>(null)
 
   useEffect(() => {
     fetchJobDetails()
@@ -103,6 +106,10 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
         if (!data.job.aiAnalysis) {
           generateAIAnalysis(data.job._id)
         }
+        // Check if user has applied
+        if (session?.user?.role === "HELPER") {
+          checkApplicationStatus(data.job._id)
+        }
       } else {
         toast.error("Job not found")
         router.push("/job-board")
@@ -112,6 +119,64 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
       toast.error("Failed to load job details")
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const checkApplicationStatus = async (jobId: string) => {
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/applications/check`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.hasApplied) {
+          setHasApplied(true)
+          setApplicationStatus(data.application.status)
+        }
+      }
+    } catch (error) {
+      console.error("Error checking application status:", error)
+    }
+  }
+
+  const handleApply = async () => {
+    console.log("Apply button clicked", { 
+      session: session?.user, 
+      isVerified: session?.user?.isVerified,
+      role: session?.user?.role 
+    })
+    
+    if (!session) {
+      toast.error("Please login to apply")
+      router.push("/login")
+      return
+    }
+
+    if (session.user?.role !== "HELPER") {
+      toast.error("Only helpers can apply for jobs")
+      return
+    }
+
+    setIsApplying(true)
+    try {
+      const response = await fetch(`/api/jobs/${resolvedParams.id}/apply`, {
+        method: "POST",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success("Application submitted successfully!")
+        setHasApplied(true)
+        setApplicationStatus("pending")
+        // Refresh job details to update application count
+        fetchJobDetails()
+      } else {
+        toast.error(data.error || "Failed to apply")
+      }
+    } catch (error) {
+      console.error("Error applying for job:", error)
+      toast.error("An error occurred while applying")
+    } finally {
+      setIsApplying(false)
     }
   }
 
@@ -161,27 +226,6 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
     if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`
     if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`
     return posted.toLocaleDateString()
-  }
-
-  const handleApply = () => {
-    if (!session) {
-      toast.error("Please login to apply")
-      router.push("/login")
-      return
-    }
-
-    if (session.user?.role !== "HELPER") {
-      toast.error("Only verified helpers can apply for jobs")
-      return
-    }
-
-    // Check if helper is verified (will implement this check later)
-    setIsApplying(true)
-    setTimeout(() => {
-      toast.success("Application sent successfully!")
-      router.push(`/jobs/${resolvedParams.id}/timeline`)
-      setIsApplying(false)
-    }, 1500)
   }
 
   const handleHireHelper = (helperId: string) => {
@@ -290,15 +334,82 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
                       </p>
                     </div>
                   </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="rounded-full bg-blue-500/10 p-3">
+                      <Users className="h-5 w-5 text-blue-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Applicants</p>
+                      <p className="font-bold">{job.applicationCount || 0}</p>
+                    </div>
+                  </div>
                 </div>
 
-                <Button
-                  onClick={handleApply}
-                  className="w-full transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
-                  disabled={isApplying}
-                >
-                  {isApplying ? "Applying..." : "Apply for This Job"}
-                </Button>
+                {/* Apply Button / Status - Only for helpers */}
+                {session?.user?.role === "HELPER" && (
+                  <>
+                    {job.status === "open" ? (
+                      <>
+                        {hasApplied ? (
+                          <div className="w-full p-4 rounded-lg bg-muted text-center">
+                            <p className="font-semibold">
+                              Application Status:{" "}
+                              <span
+                                className={
+                                  applicationStatus === "accepted"
+                                    ? "text-green-600"
+                                    : applicationStatus === "rejected"
+                                      ? "text-red-600"
+                                      : "text-yellow-600"
+                                }
+                              >
+                                {applicationStatus === "accepted"
+                                  ? "Accepted"
+                                  : applicationStatus === "rejected"
+                                    ? "Rejected"
+                                    : "Pending"}
+                              </span>
+                            </p>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            onClick={handleApply}
+                            className="w-full transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+                            disabled={isApplying}
+                          >
+                            {isApplying ? "Applying..." : "Apply for This Job"}
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      <div className="w-full p-4 rounded-lg bg-muted">
+                        <p className="text-center font-semibold">
+                          {job.status === "completed" ? "Job Completed" : "Helper Assigned"}
+                        </p>
+                        {job.applicationCount > 0 && (
+                          <p className="text-center text-sm text-muted-foreground mt-1">
+                            {job.applicationCount} {job.applicationCount === 1 ? "application" : "applications"} received
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Message for non-helpers viewing the job */}
+                {(!session || session?.user?.role !== "HELPER") && job.status !== "open" && (
+                  <div className="w-full p-4 rounded-lg bg-muted">
+                    <p className="text-center font-semibold">
+                      {job.status === "completed" ? "Job Completed" : "Helper Assigned"}
+                    </p>
+                    {job.applicationCount > 0 && (
+                      <p className="text-center text-sm text-muted-foreground mt-1">
+                        {job.applicationCount} {job.applicationCount === 1 ? "application" : "applications"} received
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </Card>
 

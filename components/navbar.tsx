@@ -8,6 +8,7 @@ import { useState, useEffect } from "react"
 import Image from "next/image"
 import { useSession, signOut } from "next-auth/react"
 import { toast } from "react-hot-toast"
+import { NotificationDropdown } from "@/components/notification-dropdown"
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
@@ -61,6 +62,7 @@ export function Navbar() {
           <div className="hidden items-center space-x-4 md:flex">
             {isLoggedIn ? (
               <>
+                <NotificationDropdown />
                 <Link href="/profile">
                   <Avatar className="h-10 w-10 cursor-pointer ring-2 ring-transparent transition-all duration-300 hover:ring-primary">
                     <AvatarImage
