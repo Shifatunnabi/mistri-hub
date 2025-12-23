@@ -67,6 +67,9 @@ export default function ProfilePage() {
   const [reviews, setReviews] = useState<any[]>([])
   const [isLoadingJobs, setIsLoadingJobs] = useState(false)
   const [isLoadingReviews, setIsLoadingReviews] = useState(false)
+  const [isRecalculating, setIsRecalculating] = useState(false)
+  const [postedJobsCount, setPostedJobsCount] = useState(0)
+  const [reviewsGivenCount, setReviewsGivenCount] = useState(0)
   
   // Verification form state
   const [verificationForm, setVerificationForm] = useState({
@@ -177,9 +180,28 @@ export default function ProfilePage() {
       fetchPostedJobs()
       if (userData.role === "HELPER") {
         fetchReviews()
+      } else if (userData.role === "HELP_SEEKER") {
+        fetchHelpSeekerStats()
       }
     }
   }, [userData])
+
+  // Fetch stats for help seekers
+  const fetchHelpSeekerStats = async () => {
+    if (!userData?._id) return
+    
+    try {
+      const response = await fetch(`/api/user/help-seeker-stats?userId=${userData._id}`)
+      const data = await response.json()
+      
+      if (response.ok) {
+        setPostedJobsCount(data.postedJobsCount || 0)
+        setReviewsGivenCount(data.reviewsGivenCount || 0)
+      }
+    } catch (error) {
+      console.error("Error fetching help seeker stats:", error)
+    }
+  }
 
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -398,6 +420,40 @@ export default function ProfilePage() {
     }
   }
 
+  const handleRecalculateStats = async () => {
+    setIsRecalculating(true)
+    const loadingToast = toast.loading("Recalculating stats...")
+
+    try {
+      const response = await fetch("/api/helper/recalculate-stats", {
+        method: "POST",
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.dismiss(loadingToast)
+        toast.success("Stats recalculated successfully!")
+        
+        // Refresh user data
+        const profileResponse = await fetch("/api/user/profile")
+        const profileData = await profileResponse.json()
+        if (profileResponse.ok) {
+          setUserData(profileData.user)
+        }
+      } else {
+        toast.dismiss(loadingToast)
+        toast.error(data.error || "Failed to recalculate stats")
+      }
+    } catch (error) {
+      console.error("Error recalculating stats:", error)
+      toast.dismiss(loadingToast)
+      toast.error("An error occurred")
+    } finally {
+      setIsRecalculating(false)
+    }
+  }
+
   if (isLoading || !userData) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -483,6 +539,33 @@ export default function ProfilePage() {
                         <span className="text-sm">Completed Jobs</span>
                       </div>
                       <span className="font-bold">{userData.helperProfile?.completedJobs || 0}</span>
+                    </div>
+                    {/* <Button
+                      onClick={handleRecalculateStats}
+                      disabled={isRecalculating}
+                      variant="outline"
+                      size="sm"
+                      className="w-full mt-4"
+                    >
+                      {isRecalculating ? "Recalculating..." : "Fix Job Count"}
+                    </Button> */}
+                  </>
+                )}
+                {userData.role === "HELP_SEEKER" && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2 text-muted-foreground">
+                        <Briefcase className="h-4 w-4" />
+                        <span className="text-sm">Posted Jobs</span>
+                      </div>
+                      <span className="font-bold">{postedJobsCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2 text-muted-foreground">
+                        <Star className="h-4 w-4" />
+                        <span className="text-sm">Reviews Given</span>
+                      </div>
+                      <span className="font-bold">{reviewsGivenCount}</span>
                     </div>
                   </>
                 )}

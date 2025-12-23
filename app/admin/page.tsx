@@ -1,19 +1,27 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Users, Briefcase, CheckCircle, TrendingUp, Activity, AlertCircle, Shield } from "lucide-react"
+import { Users, Briefcase, CheckCircle, TrendingUp, Activity, AlertCircle, Shield, UserCheck } from "lucide-react"
 import Link from "next/link"
+import { toast } from "react-hot-toast"
 
-const statsData = [
-  { title: "Total Users", value: "10,234", change: "+12.5%", icon: Users, color: "text-blue-600" },
-  { title: "Active Helpers", value: "5,128", change: "+8.2%", icon: Briefcase, color: "text-green-600" },
-  { title: "Jobs Completed", value: "48,392", change: "+23.1%", icon: CheckCircle, color: "text-purple-600" },
-  { title: "Pending Approvals", value: "12", change: "Needs Review", icon: AlertCircle, color: "text-orange-600" },
-]
+interface Stats {
+  totalUsers: number
+  activeHelpers: number
+  completedJobs: number
+  pendingHelpers: number
+}
+
+interface Stats {
+  totalUsers: number
+  activeHelpers: number
+  completedJobs: number
+  pendingHelpers: number
+}
 
 const managementPages = [
   { 
@@ -22,6 +30,13 @@ const managementPages = [
     icon: Users, 
     description: "Approve and manage helper applications",
     color: "bg-blue-500 hover:bg-blue-600"
+  },
+  { 
+    title: "Help Seeker Management", 
+    href: "/admin/help-seekers", 
+    icon: UserCheck, 
+    description: "Manage help seekers and review reports",
+    color: "bg-indigo-500 hover:bg-indigo-600"
   },
   { 
     title: "Helper Verification", 
@@ -56,6 +71,8 @@ const managementPages = [
 export default function AdminDashboard() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [isLoadingStats, setIsLoadingStats] = useState(true)
 
   // Redirect if not admin
   useEffect(() => {
@@ -65,6 +82,31 @@ export default function AdminDashboard() {
       router.push("/")
     }
   }, [status, session, router])
+
+  // Fetch stats
+  useEffect(() => {
+    if (status === "authenticated" && session?.user?.role === "ADMIN") {
+      fetchStats()
+    }
+  }, [status, session])
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch("/api/admin/stats")
+      const data = await response.json()
+
+      if (response.ok) {
+        setStats(data)
+      } else {
+        toast.error("Failed to load statistics")
+      }
+    } catch (error) {
+      console.error("Error fetching stats:", error)
+      toast.error("An error occurred")
+    } finally {
+      setIsLoadingStats(false)
+    }
+  }
 
   if (status === "loading" || !session || session.user.role !== "ADMIN") {
     return (
@@ -87,32 +129,99 @@ export default function AdminDashboard() {
 
         {/* Stats Grid */}
         <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {statsData.map((stat, index) => (
-            <Card
-              key={index}
-              className="p-6 shadow-xl transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 animate-fade-in-up"
-              style={{ animationDelay: `${index * 100}ms` }}
-            >
-              <div className="flex items-start justify-between">
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">{stat.title}</p>
-                  <p className="text-3xl font-bold">{stat.value}</p>
-                  <p className={`text-sm font-medium ${stat.title === "Pending Approvals" ? "text-orange-600" : "text-green-600"}`}>
-                    {stat.change}
-                  </p>
+          {isLoadingStats ? (
+            // Loading skeletons
+            [...Array(4)].map((_, index) => (
+              <Card
+                key={index}
+                className="p-6 shadow-xl animate-fade-in-up"
+                style={{ animationDelay: `${index * 100}ms` }}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2 flex-1">
+                    <div className="h-4 bg-muted rounded w-24 animate-pulse"></div>
+                    <div className="h-8 bg-muted rounded w-32 animate-pulse"></div>
+                    <div className="h-4 bg-muted rounded w-16 animate-pulse"></div>
+                  </div>
+                  <div className="rounded-full bg-muted p-3 h-12 w-12 animate-pulse"></div>
                 </div>
-                <div className={`rounded-full bg-muted p-3 ${stat.color}`}>
-                  <stat.icon className="h-6 w-6" />
+              </Card>
+            ))
+          ) : stats ? (
+            <>
+              <Card
+                className="p-6 shadow-xl transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 animate-fade-in-up"
+                style={{ animationDelay: '0ms' }}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Total Users</p>
+                    <p className="text-3xl font-bold">{stats.totalUsers.toLocaleString()}</p>
+                    <p className="text-sm font-medium text-green-600">All registered users</p>
+                  </div>
+                  <div className="rounded-full bg-muted p-3 text-blue-600">
+                    <Users className="h-6 w-6" />
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+
+              <Card
+                className="p-6 shadow-xl transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 animate-fade-in-up"
+                style={{ animationDelay: '100ms' }}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Active Helpers</p>
+                    <p className="text-3xl font-bold">{stats.activeHelpers.toLocaleString()}</p>
+                    <p className="text-sm font-medium text-green-600">Approved & Active</p>
+                  </div>
+                  <div className="rounded-full bg-muted p-3 text-green-600">
+                    <Briefcase className="h-6 w-6" />
+                  </div>
+                </div>
+              </Card>
+
+              <Card
+                className="p-6 shadow-xl transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 animate-fade-in-up"
+                style={{ animationDelay: '200ms' }}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Jobs Completed</p>
+                    <p className="text-3xl font-bold">{stats.completedJobs.toLocaleString()}</p>
+                    <p className="text-sm font-medium text-green-600">Successfully finished</p>
+                  </div>
+                  <div className="rounded-full bg-muted p-3 text-purple-600">
+                    <CheckCircle className="h-6 w-6" />
+                  </div>
+                </div>
+              </Card>
+
+              <Card
+                className="p-6 shadow-xl transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 animate-fade-in-up"
+                style={{ animationDelay: '300ms' }}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Pending Approvals</p>
+                    <p className="text-3xl font-bold">{stats.pendingHelpers}</p>
+                    <p className="text-sm font-medium text-orange-600">
+                      {stats.pendingHelpers > 0 ? "Needs Review" : "All reviewed"}
+                    </p>
+                  </div>
+                  <div className="rounded-full bg-muted p-3 text-orange-600">
+                    <AlertCircle className="h-6 w-6" />
+                  </div>
+                </div>
+              </Card>
+            </>
+          ) : null}
         </div>
 
         {/* Management Pages Grid */}
         <div>
           <h2 className="text-2xl font-bold mb-6">Management Pages</h2>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {managementPages.map((page, index) => (
               <Link key={index} href={page.href}>
                 <Card 

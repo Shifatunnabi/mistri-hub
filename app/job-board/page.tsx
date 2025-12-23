@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { CreateJobDialog } from "@/components/create-job-dialog"
 import { CreatePostSection } from "@/components/job-board/create-post-section"
@@ -9,12 +10,20 @@ import { JobPostCard, type JobPost } from "@/components/job-board/job-post-card"
 import { toast } from "sonner"
 
 export default function JobBoardPage() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const [isCreateJobOpen, setIsCreateJobOpen] = useState(false)
   const [jobs, setJobs] = useState<JobPost[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
+
+  // Redirect if not logged in
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
 
   useEffect(() => {
     fetchJobs()
@@ -81,6 +90,17 @@ export default function JobBoardPage() {
 
   const handleLoadMore = () => {
     fetchJobs(page + 1)
+  }
+
+  if (status === "loading" || status === "unauthenticated") {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   if (isLoading && jobs.length === 0) {

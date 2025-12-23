@@ -422,7 +422,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
 
                     <div className="rounded-lg border border-accent/30 bg-accent/5 p-4">
                       <p className="text-sm text-muted-foreground">
-                        <strong className="text-foreground">Estimated Cost:</strong> {job.aiAnalysis.budget}
+                        <strong className="text-foreground">Estimated Cost:</strong> {job.aiAnalysis.budget}  (Budget is estimated by AI, might be different than local pricing)
                       </p>
                     </div>
                   </>

@@ -107,7 +107,7 @@ export function JobPostCard({ job, index = 0 }: JobPostCardProps) {
             <div className="flex items-center space-x-1 text-sm font-bold text-primary whitespace-nowrap">
               <DollarSign className="h-4 w-4" />
               <span>
-                ${job.budgetMin} - ${job.budgetMax}
+                ৳{job.budgetMin} - ৳{job.budgetMax}
               </span>
             </div>
           )}

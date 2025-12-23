@@ -532,7 +532,7 @@ export default function HelperManagementPage() {
                     {selectedHelper.helperProfile?.experience && (
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">Experience</Label>
-                        <p className="text-sm">{selectedHelper.helperProfile.experience}</p>
+                        <p className="text-sm">{selectedHelper.helperProfile.experience} years</p>
                       </div>
                     )}
                     

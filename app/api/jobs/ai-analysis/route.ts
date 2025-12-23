@@ -36,10 +36,10 @@ When given a problem, you must respond ONLY with a valid JSON object in this exa
     {"order": "Step 2: Short title (3-4 words)", "description": "Brief description of this step"},
     {"order": "Step 3: Short title (3-4 words)", "description": "Brief description of this step"}
   ],
-  "budget": "500-1500 BDT"
+  "budget": "xxx-xxxx BDT"
 }
 
-Provide up to 5 steps. Budget should be in BDT (Bangladeshi Taka). Do not include any other text, only the JSON.`
+Provide up to 5 steps. Budget should be a range in BDT (Bangladeshi Taka), also as this is repair service do not push the limit higher than 5000 BDT, and for each problem try to suggest different range. Do not include any other text, only the JSON.`
 
     const userPrompt = `Job Title: ${jobTitle}
 

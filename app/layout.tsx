@@ -8,26 +8,20 @@ import { Footer } from "@/components/footer"
 import { AuthProvider } from "@/components/auth-provider"
 
 export const metadata: Metadata = {
-  title: "MistriHub - Your Hyperlocal Gig Service Platform",
+  title: "MistriHub ",
   description:
     "Connect with trusted local helpers for all your everyday tasks - plumbing, repairs, furniture assembly, and more.",
-  generator: "v0.app",
+  generator: "",
   icons: {
     icon: [
       {
-        url: "/icon-light-32x32.png",
-        media: "(prefers-color-scheme: light)",
+        url: "/logo.png",
+        sizes: "any",
       },
-      {
-        url: "/icon-dark-32x32.png",
-        media: "(prefers-color-scheme: dark)",
-      },
-      {
-        url: "/icon.svg",
-        type: "image/svg+xml",
-      },
+      
     ],
     apple: "/apple-icon.png",
+    shortcut: "/logo.png",
   },
 }
 

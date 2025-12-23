@@ -118,7 +118,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ id: st
     if (!profile?.helperProfile) return
     setIsLoadingReviews(true)
     try {
-      const response = await fetch(`/api/reviews/helper/${resolvedParams.id}`)
+      const response = await fetch(`/api/reviews?helperId=${resolvedParams.id}`)
       if (response.ok) {
         const data = await response.json()
         setReviews(data.reviews)
@@ -257,19 +257,19 @@ export default function PublicProfilePage({ params }: { params: Promise<{ id: st
                       <Briefcase className="h-5 w-5 text-primary" />
                       Experience
                     </h3>
-                    <p className="text-muted-foreground">{profile.helperProfile.experience}</p>
+                    <p className="text-muted-foreground">{profile.helperProfile.experience} years</p>
                   </div>
                 )}
 
                 {/* Hourly Rate */}
-                {profile.helperProfile.hourlyRate && (
+                {/* {profile.helperProfile.hourlyRate && (
                   <div>
                     <h3 className="text-lg font-semibold mb-3">Hourly Rate</h3>
                     <p className="text-2xl font-bold text-primary">
-                      ${profile.helperProfile.hourlyRate}/hr
+                      ৳{profile.helperProfile.hourlyRate}/hr
                     </p>
                   </div>
-                )}
+                )} */}
               </div>
             </CardContent>
           )}
@@ -404,7 +404,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ id: st
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">{job.category}</span>
                             <span className="font-semibold text-primary">
-                              ${job.budget.min} - ${job.budget.max}
+                              ৳{job.budget.min} - ৳{job.budget.max}
                             </span>
                           </div>
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">

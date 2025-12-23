@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       if (helper.helperProfile) {
         helper.helperProfile.rating = helper.averageRating
         helper.helperProfile.totalReviews = totalReviews
-        helper.helperProfile.completedJobs = (helper.helperProfile.completedJobs || 0) + 1
+        // Note: completedJobs is already incremented when job is confirmed, not when reviewed
       }
 
       await helper.save()
