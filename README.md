@@ -169,24 +169,7 @@ mistri-hub/
    
    Navigate to [http://localhost:3000](http://localhost:3000)
 
-### 👨‍💼 Creating an Admin Account
 
-Run the admin creation script:
-
-```bash
-node scripts/create-admin.js
-```
-
-**Default Admin Credentials:**
-- Email: `admin@mistrihub.com`
-- Password: `Admin@123`
-
-After creation:
-1. Login at [http://localhost:3000/login](http://localhost:3000/login)
-2. Access admin panel at [http://localhost:3000/admin](http://localhost:3000/admin)
-3. **Important**: Change your password after first login!
-
-To customize admin credentials, edit `scripts/create-admin.js` before running.
 
 ## 📱 User Roles
 
@@ -301,19 +284,7 @@ For issues, questions, or suggestions:
 - Contact the development team
 - Check the documentation in `/docs` (if available)
 
-## 🎯 Roadmap
 
-- [ ] Real-time chat system
-- [ ] Payment gateway integration
-- [ ] Mobile app (React Native)
-- [ ] Advanced analytics dashboard
-- [ ] Multi-language support
-- [ ] SMS notifications
-- [ ] Helper availability calendar
-- [ ] Advanced search filters
-- [ ] Helper badge system
-- [ ] Referral program
 
 ---
 
-**Built with ❤️ for the MistriHub community**
