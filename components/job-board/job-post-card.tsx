@@ -35,6 +35,7 @@ const getStatusColor = (status: string) => {
     case "Open":
       return "bg-green-500 text-white"
     case "assigned":
+      return "bg-red-500 text-white"
     case "scheduled":
     case "in_progress":
       return "bg-blue-500 text-white"
@@ -52,7 +53,7 @@ const getStatusLabel = (status: string) => {
     case "open":
       return "Open"
     case "assigned":
-      return "Assigned"
+      return "Booked"
     case "scheduled":
       return "Scheduled"
     case "in_progress":

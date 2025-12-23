@@ -1,7 +1,6 @@
 import mongoose, { Schema, Document, Model } from "mongoose"
 
 export interface IJob extends Document {
-  _id: string
   title: string
   description: string
   category: string

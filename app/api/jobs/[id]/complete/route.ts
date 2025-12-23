@@ -36,12 +36,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     job.completedAt = new Date()
     await job.save()
 
+    // Populate helper and seeker data before returning
+    await job.populate([
+      { path: "helpSeeker", select: "name email profilePhoto phone" },
+      { path: "assignedHelper", select: "name email profilePhoto phone averageRating isVerified" }
+    ])
+
     // Notify job seeker to review and confirm completion
     await createNotification({
-      userId: job.helpSeeker.toString(),
+      userId: job.helpSeeker._id.toString(),
       type: "timeline_update",
-      title: "Job Completed - Awaiting Confirmation",
-      message: `The helper has marked your job "${job.title}" as complete. Please review and confirm.`,
+      title: "Job Marked Complete",
+      message: `The helper has marked your job "${job.title}" as complete. Please check the timeline and mark the job as completed if you're satisfied with the work.`,
       jobId: jobId,
       link: `/jobs/${jobId}/timeline`,
     })

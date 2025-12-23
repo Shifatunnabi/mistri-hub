@@ -37,18 +37,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     job.confirmedAt = new Date()
     await job.save()
 
+    // Populate helper and seeker data before returning
+    await job.populate([
+      { path: "helpSeeker", select: "name email profilePhoto phone" },
+      { path: "assignedHelper", select: "name email profilePhoto phone averageRating isVerified" }
+    ])
+
     // Update helper's completed jobs count
     if (job.assignedHelper) {
-      await User.findByIdAndUpdate(job.assignedHelper, {
+      await User.findByIdAndUpdate(job.assignedHelper._id, {
         $inc: { "helperProfile.completedJobs": 1 },
       })
 
       // Notify helper that job has been confirmed
       await createNotification({
-        userId: job.assignedHelper.toString(),
+        userId: job.assignedHelper._id.toString(),
         type: "timeline_update",
-        title: "Job Confirmed - Well Done! 🎉",
-        message: `The job "${job.title}" has been confirmed as completed. Great work!`,
+        title: "Congratulations! Job Completed 🎉",
+        message: `The help seeker has confirmed that the job "${job.title}" is completed. Congratulations on successfully finishing the job!`,
         jobId: jobId,
         link: `/jobs/${jobId}/timeline`,
       })

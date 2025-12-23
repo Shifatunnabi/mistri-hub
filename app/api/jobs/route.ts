@@ -16,13 +16,12 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category")
     const status = searchParams.get("status") || "open"
     const helpSeeker = searchParams.get("helpSeeker")
+    const assignedHelper = searchParams.get("assignedHelper")
 
     const query: any = {}
     
-    // Filter by status if no specific helpSeeker is requested
-    if (!helpSeeker) {
-      query.status = status
-    }
+    // Don't filter by status for job board - show ALL jobs
+    // Only filter when specifically requesting user's posted or assigned jobs
     
     if (category) {
       query.category = category
@@ -31,6 +30,13 @@ export async function GET(req: NextRequest) {
     // Filter by helpSeeker for user's posted jobs
     if (helpSeeker) {
       query.helpSeeker = helpSeeker
+    }
+    
+    // Filter by assignedHelper for helper's assigned jobs
+    if (assignedHelper) {
+      query.assignedHelper = assignedHelper
+      // Only show jobs that have been assigned (not open jobs)
+      query.status = { $in: ["assigned", "scheduled", "in_progress", "pending_review", "completed"] }
     }
 
     const skip = (page - 1) * limit

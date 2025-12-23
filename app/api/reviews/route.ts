@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb"
 import Review from "@/models/Review"
 import Job from "@/models/Job"
 import User from "@/models/User"
+import { createNotification } from "@/lib/notifications"
 
 export async function POST(req: NextRequest) {
   try {
@@ -77,6 +78,16 @@ export async function POST(req: NextRequest) {
       }
 
       await helper.save()
+
+      // Notify helper about new review
+      await createNotification({
+        userId: helper._id.toString(),
+        type: "new_review",
+        title: "New Review Received",
+        message: `You received a new ${rating}-star review for the job "${job.title}". Check your profile to see the feedback.`,
+        jobId: jobId,
+        link: `/profile`,
+      })
     }
 
     return NextResponse.json(
@@ -103,16 +114,21 @@ export async function GET(req: NextRequest) {
 
     // Check if user has already reviewed a specific job
     if (jobId) {
-      if (!session || !session.user) {
-        return NextResponse.json({ hasReviewed: false }, { status: 200 })
-      }
-
       const existingReview = await Review.findOne({
         job: jobId,
-        reviewer: session.user.id,
-      })
+      }).populate("reviewer", "name profilePhoto")
 
-      return NextResponse.json({ hasReviewed: !!existingReview }, { status: 200 })
+      if (!session || !session.user) {
+        return NextResponse.json({ 
+          hasReviewed: !!existingReview,
+          review: existingReview 
+        }, { status: 200 })
+      }
+
+      return NextResponse.json({ 
+        hasReviewed: !!existingReview,
+        review: existingReview 
+      }, { status: 200 })
     }
 
     // Fetch reviews for a helper

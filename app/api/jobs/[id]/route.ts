@@ -7,7 +7,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     await connectDB()
 
     const { id } = await params
-    const job = await Job.findById(id).populate("helpSeeker", "name email profilePhoto phone")
+    const job = await Job.findById(id)
+      .populate("helpSeeker", "name email profilePhoto phone")
+      .populate("assignedHelper", "name email profilePhoto phone averageRating isVerified")
 
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 })

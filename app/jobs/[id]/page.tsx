@@ -7,48 +7,11 @@ import { Card } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { PhotoSlider } from "@/components/photo-slider"
-import { MapPin, DollarSign, Clock, Lightbulb, Users, Star, CheckCircle, ArrowLeft, Loader2 } from "lucide-react"
+import { MapPin, DollarSign, Clock, Lightbulb, Users, ArrowLeft, Loader2 } from "lucide-react"
 import Link from "next/link"
 import toast from "react-hot-toast"
 import { useRouter } from "next/navigation"
 import { VerifiedBadge } from "@/components/verified-badge"
-
-// Mock data for nearby helpers (will be implemented later)
-const nearbyHelpers = [
-  {
-    id: "1",
-    name: "John Smith",
-    avatar: "/placeholder.svg?key=helper1",
-    rating: 4.8,
-    reviews: 45,
-    skills: "Plumbing, Repairs",
-    distance: "0.5 miles",
-    hourlyRate: 40,
-    isVerified: true,
-  },
-  {
-    id: "2",
-    name: "Maria Garcia",
-    avatar: "/placeholder.svg?key=helper2",
-    rating: 4.9,
-    reviews: 78,
-    skills: "Plumbing, Installation",
-    distance: "0.8 miles",
-    hourlyRate: 45,
-    isVerified: true,
-  },
-  {
-    id: "3",
-    name: "David Lee",
-    avatar: "/placeholder.svg?key=helper3",
-    rating: 4.7,
-    reviews: 32,
-    skills: "General Repairs, Plumbing",
-    distance: "1.2 miles",
-    hourlyRate: 35,
-    isVerified: false,
-  },
-]
 
 interface Job {
   _id: string
@@ -65,6 +28,7 @@ interface Job {
   applicationCount: number
   createdAt: string
   helpSeeker: {
+    _id: string
     name: string
     profilePhoto?: string
   }
@@ -228,13 +192,6 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
     return posted.toLocaleDateString()
   }
 
-  const handleHireHelper = (helperId: string) => {
-    toast.success("Helper hired! Redirecting to job timeline...")
-    setTimeout(() => {
-      router.push(`/jobs/${resolvedParams.id}/timeline`)
-    }, 1000)
-  }
-
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -267,14 +224,14 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
           Back to feed
         </Link>
 
-        <div className="grid gap-8 lg:grid-cols-3">
+        <div className="max-w-4xl mx-auto">
           {/* Main Content */}
-          <div className="space-y-6 lg:col-span-2">
+          <div className="space-y-6">
             {/* Job Details Card */}
             <Card className="overflow-hidden shadow-xl animate-fade-in-up">
               {/* Header */}
               <div className="flex items-start justify-between border-b border-border bg-muted/30 p-6">
-                <div className="flex items-center space-x-3">
+                <Link href={`/profile/${job.helpSeeker._id}`} className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
                   <Avatar className="h-14 w-14 ring-2 ring-border">
                     <AvatarImage src={job.helpSeeker.profilePhoto || "/placeholder.svg"} />
                     <AvatarFallback className="bg-primary text-primary-foreground">
@@ -288,7 +245,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
                       <span>Posted {getTimeAgo(job.createdAt)}</span>
                     </div>
                   </div>
-                </div>
+                </Link>
                 <Badge className="bg-primary text-primary-foreground">
                   {job.status === "open" ? "Open" : "Closed"}
                 </Badge>
@@ -383,28 +340,33 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
                         )}
                       </>
                     ) : (
-                      <div className="w-full p-4 rounded-lg bg-muted">
-                        <p className="text-center font-semibold">
-                          {job.status === "completed" ? "Job Completed" : "Helper Assigned"}
-                        </p>
-                        {job.applicationCount > 0 && (
-                          <p className="text-center text-sm text-muted-foreground mt-1">
-                            {job.applicationCount} {job.applicationCount === 1 ? "application" : "applications"} received
-                          </p>
-                        )}
-                      </div>
+                      <Button
+                        type="button"
+                        className="w-full"
+                        disabled
+                      >
+                        {job.status === "assigned" 
+                          ? "Helper already assigned for this job"
+                          : job.status === "completed" 
+                          ? "Job Completed" 
+                          : "This job is no longer available"}
+                      </Button>
                     )}
                   </>
                 )}
 
                 {/* Message for non-helpers viewing the job */}
                 {(!session || session?.user?.role !== "HELPER") && job.status !== "open" && (
-                  <div className="w-full p-4 rounded-lg bg-muted">
-                    <p className="text-center font-semibold">
-                      {job.status === "completed" ? "Job Completed" : "Helper Assigned"}
+                  <div className="w-full p-4 rounded-lg bg-muted text-center">
+                    <p className="font-semibold">
+                      {job.status === "assigned" 
+                        ? "Helper already assigned for this job"
+                        : job.status === "completed" 
+                        ? "Job Completed" 
+                        : "This job is no longer available"}
                     </p>
                     {job.applicationCount > 0 && (
-                      <p className="text-center text-sm text-muted-foreground mt-1">
+                      <p className="text-sm text-muted-foreground mt-1">
                         {job.applicationCount} {job.applicationCount === 1 ? "application" : "applications"} received
                       </p>
                     )}
@@ -469,73 +431,6 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
                     <p className="text-muted-foreground">AI analysis not available</p>
                   </div>
                 )}
-              </div>
-            </Card>
-          </div>
-
-          {/* Sidebar - Nearby Helpers */}
-          <div className="space-y-6">
-            <Card className="overflow-hidden shadow-xl animate-fade-in-up animation-delay-300">
-              <div className="border-b border-border bg-primary/5 p-6">
-                <div className="flex items-center space-x-3">
-                  <div className="rounded-full bg-primary p-3">
-                    <Users className="h-6 w-6 text-primary-foreground" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold">Nearby Helpers</h2>
-                    <p className="text-sm text-muted-foreground">Available in your area</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="divide-y divide-border">
-                {nearbyHelpers.map((helper) => (
-                  <div key={helper.id} className="space-y-4 p-6 transition-colors hover:bg-muted/50">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center space-x-3">
-                        <Avatar className="h-12 w-12 ring-2 ring-border">
-                          <AvatarImage src={helper.avatar || "/placeholder.svg"} />
-                          <AvatarFallback className="bg-primary text-primary-foreground">
-                            {helper.name.charAt(0)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-bold">{helper.name}</h3>
-                            <VerifiedBadge isVerified={helper.isVerified} size="sm" />
-                          </div>
-                          <div className="flex items-center space-x-1 text-sm">
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            <span className="font-medium">{helper.rating}</span>
-                            <span className="text-muted-foreground">({helper.reviews})</span>
-                          </div>
-                        </div>
-                      </div>
-                      <Badge variant="secondary" className="whitespace-nowrap">
-                        ${helper.hourlyRate}/hr
-                      </Badge>
-                    </div>
-
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center space-x-2 text-muted-foreground">
-                        <CheckCircle className="h-4 w-4" />
-                        <span>{helper.skills}</span>
-                      </div>
-                      <div className="flex items-center space-x-2 text-muted-foreground">
-                        <MapPin className="h-4 w-4" />
-                        <span>{helper.distance} away</span>
-                      </div>
-                    </div>
-
-                    <Button
-                      onClick={() => handleHireHelper(helper.id)}
-                      variant="outline"
-                      className="w-full transition-all duration-300 hover:scale-[1.02] hover:bg-primary hover:text-primary-foreground"
-                    >
-                      Hire Helper
-                    </Button>
-                  </div>
-                ))}
               </div>
             </Card>
           </div>

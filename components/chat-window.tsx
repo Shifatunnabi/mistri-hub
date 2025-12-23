@@ -8,47 +8,41 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { X, Send, Paperclip } from "lucide-react"
 import { cn } from "@/lib/utils"
+import toast from "react-hot-toast"
 
 interface ChatWindowProps {
   isOpen: boolean
   onClose: () => void
+  jobId: string
+  currentUserId: string
   recipient: {
+    _id: string
     name: string
-    avatar: string
+    profilePhoto?: string
+    averageRating: number
+    isVerified: boolean
   }
 }
 
-const mockMessages = [
-  {
-    id: "1",
-    sender: "helper",
-    text: "Hi! I saw your plumbing job. I can help you with that. When would be a good time?",
-    timestamp: "10:30 AM",
-  },
-  {
-    id: "2",
-    sender: "me",
-    text: "Great! Would today at 2 PM work for you?",
-    timestamp: "10:32 AM",
-  },
-  {
-    id: "3",
-    sender: "helper",
-    text: "Perfect! I will be there at 2 PM. Please make sure the area under the sink is accessible.",
-    timestamp: "10:35 AM",
-  },
-  {
-    id: "4",
-    sender: "me",
-    text: "Will do. See you then!",
-    timestamp: "10:36 AM",
-  },
-]
+interface Message {
+  _id: string
+  sender: {
+    _id: string
+    name: string
+    profilePhoto?: string
+  }
+  text: string
+  createdAt: string
+}
 
-export function ChatWindow({ isOpen, onClose, recipient }: ChatWindowProps) {
-  const [messages, setMessages] = useState(mockMessages)
+export function ChatWindow({ isOpen, onClose, jobId, currentUserId, recipient }: ChatWindowProps) {
+  const recipientAvatar = recipient.profilePhoto || "/placeholder.svg"
+  const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
+  const [isSending, setIsSending] = useState(false)
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const pollingInterval = useRef<NodeJS.Timeout | null>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -58,18 +52,72 @@ export function ChatWindow({ isOpen, onClose, recipient }: ChatWindowProps) {
     scrollToBottom()
   }, [messages])
 
-  const handleSend = () => {
-    if (!inputValue.trim()) return
+  // Fetch messages
+  const fetchMessages = async () => {
+    try {
+      setIsLoadingMessages(true)
+      const response = await fetch(`/api/jobs/${jobId}/messages`)
+      const data = await response.json()
 
-    const newMessage = {
-      id: String(messages.length + 1),
-      sender: "me",
-      text: inputValue,
-      timestamp: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+      if (response.ok) {
+        setMessages(data.messages)
+      } else {
+        console.error("Failed to fetch messages:", data.error)
+      }
+    } catch (error) {
+      console.error("Error fetching messages:", error)
+    } finally {
+      setIsLoadingMessages(false)
     }
+  }
 
-    setMessages([...messages, newMessage])
+  // Initial fetch and setup polling
+  useEffect(() => {
+    if (isOpen && jobId) {
+      fetchMessages()
+      
+      // Poll for new messages every 3 seconds
+      pollingInterval.current = setInterval(fetchMessages, 3000)
+      
+      return () => {
+        if (pollingInterval.current) {
+          clearInterval(pollingInterval.current)
+        }
+      }
+    }
+  }, [isOpen, jobId])
+
+  const handleSend = async () => {
+    if (!inputValue.trim() || isSending) return
+
+    const messageText = inputValue.trim()
     setInputValue("")
+    setIsSending(true)
+
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: messageText }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Add the new message to the list immediately
+        setMessages([...messages, data.data])
+      } else {
+        toast.error(data.error || "Failed to send message")
+        // Restore the input value on error
+        setInputValue(messageText)
+      }
+    } catch (error) {
+      console.error("Error sending message:", error)
+      toast.error("Failed to send message")
+      setInputValue(messageText)
+    } finally {
+      setIsSending(false)
+    }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -77,6 +125,11 @@ export function ChatWindow({ isOpen, onClose, recipient }: ChatWindowProps) {
       e.preventDefault()
       handleSend()
     }
+  }
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
   }
 
   if (!isOpen) return null
@@ -90,7 +143,7 @@ export function ChatWindow({ isOpen, onClose, recipient }: ChatWindowProps) {
           <div className="flex items-center justify-between border-b border-border bg-primary p-4 text-primary-foreground">
             <div className="flex items-center space-x-3">
               <Avatar className="h-10 w-10 ring-2 ring-primary-foreground/20">
-                <AvatarImage src={recipient.avatar || "/placeholder.svg"} />
+                <AvatarImage src={recipientAvatar} />
                 <AvatarFallback>{recipient.name.charAt(0)}</AvatarFallback>
               </Avatar>
               <div>
@@ -105,42 +158,58 @@ export function ChatWindow({ isOpen, onClose, recipient }: ChatWindowProps) {
 
           {/* Messages */}
           <div className="h-96 space-y-4 overflow-y-auto bg-muted/30 p-4">
-            {messages.map((message) => (
-              <div key={message.id} className={cn("flex", message.sender === "me" ? "justify-end" : "justify-start")}>
-                <div
-                  className={cn(
-                    "max-w-[75%] rounded-lg p-3 shadow-sm",
-                    message.sender === "me" ? "bg-primary text-primary-foreground" : "bg-card",
-                  )}
-                >
-                  <p className="text-sm">{message.text}</p>
-                  <p
-                    className={cn(
-                      "mt-1 text-xs",
-                      message.sender === "me" ? "text-primary-foreground/70" : "text-muted-foreground",
-                    )}
-                  >
-                    {message.timestamp}
-                  </p>
-                </div>
+            {isLoadingMessages && messages.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-sm text-muted-foreground">Loading messages...</p>
               </div>
-            ))}
+            ) : messages.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-sm text-muted-foreground">No messages yet. Start the conversation!</p>
+              </div>
+            ) : (
+              messages.map((message) => {
+                const isMyMessage = message.sender._id === currentUserId
+                return (
+                  <div key={message._id} className={cn("flex", isMyMessage ? "justify-end" : "justify-start")}>
+                    <div
+                      className={cn(
+                        "max-w-[75%] rounded-lg p-3 shadow-sm",
+                        isMyMessage ? "bg-primary text-primary-foreground" : "bg-card",
+                      )}
+                    >
+                      <p className="text-sm">{message.text}</p>
+                      <p
+                        className={cn(
+                          "mt-1 text-xs",
+                          isMyMessage ? "text-primary-foreground/70" : "text-muted-foreground",
+                        )}
+                      >
+                        {formatTime(message.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })
+            )}
             <div ref={messagesEndRef} />
           </div>
 
           {/* Input */}
           <div className="flex items-center space-x-2 border-t border-border bg-card p-4">
-            <button className="text-muted-foreground transition-colors hover:text-primary">
-              <Paperclip className="h-5 w-5" />
-            </button>
             <Input
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Type a message..."
               className="flex-1"
+              disabled={isSending}
             />
-            <Button onClick={handleSend} size="icon" className="transition-transform hover:scale-105">
+            <Button 
+              onClick={handleSend} 
+              size="icon" 
+              className="transition-transform hover:scale-105"
+              disabled={isSending || !inputValue.trim()}
+            >
               <Send className="h-5 w-5" />
             </Button>
           </div>
@@ -153,7 +222,7 @@ export function ChatWindow({ isOpen, onClose, recipient }: ChatWindowProps) {
         <div className="flex items-center justify-between border-b border-border bg-primary p-4 text-primary-foreground">
           <div className="flex items-center space-x-3">
             <Avatar className="h-10 w-10 ring-2 ring-primary-foreground/20">
-              <AvatarImage src={recipient.avatar || "/placeholder.svg"} />
+              <AvatarImage src={recipientAvatar} />
               <AvatarFallback>{recipient.name.charAt(0)}</AvatarFallback>
             </Avatar>
             <div>
@@ -168,42 +237,58 @@ export function ChatWindow({ isOpen, onClose, recipient }: ChatWindowProps) {
 
         {/* Messages */}
         <div className="flex-1 space-y-4 overflow-y-auto bg-muted/30 p-4">
-          {messages.map((message) => (
-            <div key={message.id} className={cn("flex", message.sender === "me" ? "justify-end" : "justify-start")}>
-              <div
-                className={cn(
-                  "max-w-[75%] rounded-lg p-3 shadow-sm",
-                  message.sender === "me" ? "bg-primary text-primary-foreground" : "bg-card",
-                )}
-              >
-                <p className="text-sm">{message.text}</p>
-                <p
-                  className={cn(
-                    "mt-1 text-xs",
-                    message.sender === "me" ? "text-primary-foreground/70" : "text-muted-foreground",
-                  )}
-                >
-                  {message.timestamp}
-                </p>
-              </div>
+          {isLoadingMessages && messages.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-sm text-muted-foreground">Loading messages...</p>
             </div>
-          ))}
+          ) : messages.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-sm text-muted-foreground">No messages yet. Start the conversation!</p>
+            </div>
+          ) : (
+            messages.map((message) => {
+              const isMyMessage = message.sender._id === currentUserId
+              return (
+                <div key={message._id} className={cn("flex", isMyMessage ? "justify-end" : "justify-start")}>
+                  <div
+                    className={cn(
+                      "max-w-[75%] rounded-lg p-3 shadow-sm",
+                      isMyMessage ? "bg-primary text-primary-foreground" : "bg-card",
+                    )}
+                  >
+                    <p className="text-sm">{message.text}</p>
+                    <p
+                      className={cn(
+                        "mt-1 text-xs",
+                        isMyMessage ? "text-primary-foreground/70" : "text-muted-foreground",
+                      )}
+                    >
+                      {formatTime(message.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              )
+            })
+          )}
           <div ref={messagesEndRef} />
         </div>
 
         {/* Input */}
         <div className="flex items-center space-x-2 border-t border-border bg-card p-4">
-          <button className="text-muted-foreground transition-colors hover:text-primary">
-            <Paperclip className="h-5 w-5" />
-          </button>
           <Input
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Type a message..."
             className="flex-1"
+            disabled={isSending}
           />
-          <Button onClick={handleSend} size="icon" className="transition-transform hover:scale-105">
+          <Button 
+            onClick={handleSend} 
+            size="icon" 
+            className="transition-transform hover:scale-105"
+            disabled={isSending || !inputValue.trim()}
+          >
             <Send className="h-5 w-5" />
           </Button>
         </div>

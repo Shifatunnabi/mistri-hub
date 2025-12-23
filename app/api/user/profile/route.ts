@@ -69,7 +69,7 @@ export async function PUT(req: NextRequest) {
     await user.save()
 
     // Return user without password
-    const userResponse = user.toObject()
+    const userResponse: any = user.toObject()
     delete userResponse.password
 
     return NextResponse.json(

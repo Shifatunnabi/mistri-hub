@@ -126,20 +126,27 @@ export default function ProfilePage() {
     fetchUserData()
   }, [status])
 
-  // Fetch posted jobs
+  // Fetch posted jobs or assigned jobs based on role
   const fetchPostedJobs = async () => {
     if (!userData?._id) return
     
     setIsLoadingJobs(true)
     try {
-      const response = await fetch(`/api/jobs?helpSeeker=${userData._id}`)
+      let response;
+      if (userData.role === "HELPER") {
+        // Fetch jobs assigned to this helper
+        response = await fetch(`/api/jobs?assignedHelper=${userData._id}`)
+      } else {
+        // Fetch jobs posted by this help seeker
+        response = await fetch(`/api/jobs?helpSeeker=${userData._id}`)
+      }
       const data = await response.json()
       
       if (response.ok) {
         setPostedJobs(data.jobs || [])
       }
     } catch (error) {
-      console.error("Error fetching posted jobs:", error)
+      console.error("Error fetching jobs:", error)
     } finally {
       setIsLoadingJobs(false)
     }
@@ -488,7 +495,9 @@ export default function ProfilePage() {
             <Tabs defaultValue="personal" className="space-y-6">
               <TabsList className={`grid w-full ${userData.role === "HELPER" ? "grid-cols-3" : "grid-cols-2"}`}>
                 <TabsTrigger value="personal">Personal Info</TabsTrigger>
-                <TabsTrigger value="posted-jobs">Posted Jobs</TabsTrigger>
+                <TabsTrigger value="posted-jobs">
+                  {userData.role === "HELPER" ? "Assigned Jobs" : "Posted Jobs"}
+                </TabsTrigger>
                 {userData.role === "HELPER" && (
                   <TabsTrigger value="helper">
                     Helper Profile
@@ -662,18 +671,22 @@ export default function ProfilePage() {
                 </Card>
               </TabsContent>
 
-              {/* Posted Jobs Tab */}
+              {/* Posted Jobs / Assigned Jobs Tab */}
               <TabsContent value="posted-jobs">
                 <Card className="shadow-xl animate-fade-in-up">
                   <div className="border-b border-border p-6">
-                    <h3 className="text-xl font-bold">My Posted Jobs</h3>
-                    <p className="text-sm text-muted-foreground">Jobs you have posted</p>
+                    <h3 className="text-xl font-bold">
+                      {userData.role === "HELPER" ? "My Assigned Jobs" : "My Posted Jobs"}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {userData.role === "HELPER" ? "Jobs assigned to you" : "Jobs you have posted"}
+                    </p>
                   </div>
                   <div className="p-6">
                     <PostedJobsTab 
                       jobs={postedJobs} 
-                      isLoading={isLoadingJobs}
-                      onJobUpdated={fetchPostedJobs}
+                      isOwner={userData.role !== "HELPER"}
+                      userRole={userData.role}
                     />
                   </div>
                 </Card>

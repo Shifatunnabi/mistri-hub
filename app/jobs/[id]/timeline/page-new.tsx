@@ -606,8 +606,14 @@ export default function JobTimelinePage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* Chat Window */}
-      {job.assignedHelper && (
-        <ChatWindow isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} recipient={job.assignedHelper} />
+      {job.assignedHelper && session?.user?.id && (
+        <ChatWindow 
+          isOpen={isChatOpen} 
+          onClose={() => setIsChatOpen(false)} 
+          jobId={job._id}
+          currentUserId={session.user.id}
+          recipient={job.assignedHelper} 
+        />
       )}
     </div>
   )

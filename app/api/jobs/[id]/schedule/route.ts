@@ -41,12 +41,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     job.scheduledDate = new Date(scheduledDate)
     await job.save()
 
+    // Populate helper and seeker data before returning
+    await job.populate([
+      { path: "helpSeeker", select: "name email profilePhoto phone" },
+      { path: "assignedHelper", select: "name email profilePhoto phone averageRating isVerified" }
+    ])
+
     // Notify job seeker about schedule
     await createNotification({
-      userId: job.helpSeeker.toString(),
+      userId: job.helpSeeker._id.toString(),
       type: "timeline_update",
-      title: "Job Scheduled",
-      message: `Your job "${job.title}" has been scheduled for ${new Date(scheduledDate).toLocaleDateString()}.`,
+      title: "Helper Scheduled Time",
+      message: `The helper has scheduled your job "${job.title}" for ${new Date(scheduledDate).toLocaleString()}. Please check the timeline.`,
       jobId: jobId,
       link: `/jobs/${jobId}/timeline`,
     })

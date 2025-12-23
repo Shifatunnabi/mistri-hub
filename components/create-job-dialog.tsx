@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,24 +21,17 @@ interface CreateJobDialogProps {
   onJobCreated?: () => void
 }
 
-const categories = [
-  "Plumbing",
-  "Electrical",
-  "Cleaning",
-  "Carpentry",
-  "Painting",
-  "Moving",
-  "Delivery",
-  "Tutoring",
-  "Gardening",
-  "Handyman",
-  "Other",
-]
+interface Category {
+  _id: string
+  name: string
+  active: boolean
+}
 
 export function CreateJobDialog({ open, onOpenChange, onJobCreated }: CreateJobDialogProps) {
   const { data: session } = useSession()
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [categories, setCategories] = useState<Category[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [formData, setFormData] = useState({
     title: "",
@@ -49,6 +42,26 @@ export function CreateJobDialog({ open, onOpenChange, onJobCreated }: CreateJobD
     budgetMax: "",
     images: [] as File[],
   })
+
+  // Fetch active categories when dialog opens
+  useEffect(() => {
+    if (open) {
+      fetchCategories()
+    }
+  }, [open])
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch("/api/categories?activeOnly=true")
+      const data = await response.json()
+
+      if (response.ok) {
+        setCategories(data.categories)
+      }
+    } catch (error) {
+      console.error("Error fetching categories:", error)
+    }
+  }
 
   const handleImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -240,11 +253,17 @@ export function CreateJobDialog({ open, onOpenChange, onJobCreated }: CreateJobD
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
+                  {categories.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      No categories available
+                    </div>
+                  ) : (
+                    categories.map((category) => (
+                      <SelectItem key={category._id} value={category.name}>
+                        {category.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>

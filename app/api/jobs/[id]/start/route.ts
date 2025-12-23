@@ -36,12 +36,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     job.startedAt = new Date()
     await job.save()
 
+    // Populate helper and seeker data before returning
+    await job.populate([
+      { path: "helpSeeker", select: "name email profilePhoto phone" },
+      { path: "assignedHelper", select: "name email profilePhoto phone averageRating isVerified" }
+    ])
+
     // Notify job seeker that work has started
     await createNotification({
-      userId: job.helpSeeker.toString(),
+      userId: job.helpSeeker._id.toString(),
       type: "timeline_update",
-      title: "Job Started",
-      message: `Work has started on your job: ${job.title}`,
+      title: "Work Started",
+      message: `The helper has started working on your job: "${job.title}". Check the timeline for updates.`,
       jobId: jobId,
       link: `/jobs/${jobId}/timeline`,
     })

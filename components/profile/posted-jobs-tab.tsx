@@ -27,9 +27,10 @@ interface PostedJob {
 interface PostedJobsTabProps {
   jobs: PostedJob[]
   isOwner: boolean
+  userRole?: string
 }
 
-export function PostedJobsTab({ jobs, isOwner }: PostedJobsTabProps) {
+export function PostedJobsTab({ jobs, isOwner, userRole }: PostedJobsTabProps) {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
 
   const getStatusColor = (status: string) => {
@@ -71,7 +72,9 @@ export function PostedJobsTab({ jobs, isOwner }: PostedJobsTabProps) {
   if (jobs.length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="text-muted-foreground">No jobs posted yet</p>
+        <p className="text-muted-foreground">
+          {userRole === 'HELPER' ? 'No assigned jobs yet' : 'No jobs posted yet'}
+        </p>
       </div>
     )
   }
@@ -122,10 +125,22 @@ export function PostedJobsTab({ jobs, isOwner }: PostedJobsTabProps) {
                     View Details
                   </Button>
                 </Link>
-                <Button onClick={() => setSelectedJobId(job._id)} className="w-full" variant="default">
-                  <Users className="h-4 w-4 mr-2" />
-                  View Applicants ({job.applicationCount})
-                </Button>
+                {isOwner && (
+                  <Button onClick={() => setSelectedJobId(job._id)} className="w-full" variant="default">
+                    <Users className="h-4 w-4 mr-2" />
+                    View Applicants ({job.applicationCount})
+                  </Button>
+                )}
+                <Link href={`/jobs/${job._id}/timeline`} className="w-full">
+                  <Button 
+                    variant={job.status !== 'open' ? "default" : "secondary"}
+                    className="w-full" 
+                    disabled={job.status === 'open'}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Job Timeline
+                  </Button>
+                </Link>
               </div>
             </div>
           </Card>

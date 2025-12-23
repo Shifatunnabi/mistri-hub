@@ -167,7 +167,7 @@ export function ViewApplicantsModal({ jobId, isOpen, onClose }: ViewApplicantsMo
 
                 {/* Actions */}
                 <div className="flex gap-2">
-                  <Link href={`/profile?id=${applicant.helper._id}`} target="_blank" className="flex-1">
+                  <Link href={`/profile/${applicant.helper._id}`} target="_blank" className="flex-1">
                     <Button variant="outline" className="w-full">
                       <UserIcon className="h-4 w-4 mr-2" />
                       View Profile
