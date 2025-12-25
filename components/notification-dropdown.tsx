@@ -150,53 +150,55 @@ export function NotificationDropdown() {
               <p className="text-sm">No notifications yet</p>
             </div>
           ) : (
-            notifications.map((notification) => (
-              <DropdownMenuItem
-                key={notification._id}
-                className="cursor-pointer flex-col items-start gap-2 p-3 hover:bg-muted"
-                onSelect={(e) => {
-                  // Prevent default dropdown close for clicking action button
-                  if ((e.target as HTMLElement).closest('button')) {
-                    e.preventDefault()
-                  }
-                }}
-              >
-                <div 
-                  className="flex w-full items-start gap-2"
-                  onClick={() => handleNotificationClick(notification)}
+            notifications.map((notification, index) => (
+              <div key={notification._id}>
+                {index > 0 && <DropdownMenuSeparator />}
+                <DropdownMenuItem
+                  className="cursor-pointer flex-col items-start gap-2 p-3 rounded-md transition-all hover:!bg-transparent focus:!bg-transparent data-[highlighted]:!bg-transparent border border-transparent hover:!border-primary"
+                  onSelect={(e) => {
+                    // Prevent default dropdown close for clicking action button
+                    if ((e.target as HTMLElement).closest('button')) {
+                      e.preventDefault()
+                    }
+                  }}
                 >
-                  <span className="text-xl">{getNotificationIcon(notification.type)}</span>
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{notification.title}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{notification.message}</p>
-                    {notification.job && (
-                      <p className="text-xs text-primary mt-1">Job: {notification.job.title}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
-                    </p>
-                  </div>
-                  {!notification.isRead && (
-                    <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" />
-                  )}
-                </div>
-                {shouldShowViewTimelineButton(notification) && notification.job?._id && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full mt-2"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (notification.job?._id) {
-                        router.push(`/jobs/${notification.job._id}/timeline`)
-                      }
-                      setIsOpen(false)
-                    }}
+                  <div 
+                    className="flex w-full items-start gap-2"
+                    onClick={() => handleNotificationClick(notification)}
                   >
-                    View Timeline
-                  </Button>
-                )}
-              </DropdownMenuItem>
+                    <span className="text-xl">{getNotificationIcon(notification.type)}</span>
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{notification.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{notification.message}</p>
+                      {notification.job && (
+                        <p className="text-xs text-primary mt-1">Job: {notification.job.title}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                      </p>
+                    </div>
+                    {!notification.isRead && (
+                      <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" />
+                    )}
+                  </div>
+                  {shouldShowViewTimelineButton(notification) && notification.job?._id && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full mt-2"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (notification.job?._id) {
+                          router.push(`/jobs/${notification.job._id}/timeline`)
+                        }
+                        setIsOpen(false)
+                      }}
+                    >
+                      View Timeline
+                    </Button>
+                  )}
+                </DropdownMenuItem>
+              </div>
             ))
           )}
         </ScrollArea>
